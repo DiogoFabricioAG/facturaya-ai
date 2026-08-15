@@ -1,25 +1,44 @@
-#!/bin/sh
-set -eu
+#!/usr/bin/env bash
+set -Eeuo pipefail
 
-project_dir="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/common.sh"
+
+require_command docker
+require_command curl
+require_production_config
+
 cd "$project_dir"
+app_domain="$(env_value APP_DOMAIN)"
+[[ -n "$app_domain" ]] || die "APP_DOMAIN está vacío en .env.production."
 
-if [ ! -f .env.production ]; then
-    echo "Falta .env.production. Copia .env.production.example y configura el dominio." >&2
-    exit 1
-fi
+info "Validando Docker Compose"
+compose config --quiet
 
-for secret_name in app_key db_password platform_admin_token openai_api_key; do
-    if [ ! -s "secrets/$secret_name" ]; then
-        echo "Falta el secreto secrets/$secret_name. Ejecuta ./deploy/bootstrap-secrets.sh." >&2
-        exit 1
+info "Construyendo imágenes"
+compose build --pull
+
+info "Iniciando servicios"
+compose up -d --remove-orphans
+
+info "Aplicando migraciones y cachés de Laravel"
+compose exec -T app php artisan migrate --force
+compose exec -T app php artisan optimize
+
+info "Esperando HTTPS"
+healthy=false
+for _attempt in $(seq 1 24); do
+    if curl --fail --silent --show-error --max-time 10 "https://$app_domain/api/health" >/dev/null 2>&1; then
+        healthy=true
+        break
     fi
+    sleep 5
 done
 
-docker compose --env-file .env.production build --pull
-docker compose --env-file .env.production up -d
-docker compose --env-file .env.production exec -T app php artisan migrate --force
-docker compose --env-file .env.production exec -T app php artisan optimize
-docker compose --env-file .env.production ps
+compose ps
 
-echo "Despliegue terminado. Comprueba localmente: curl --fail http://127.0.0.1:8080/api/health"
+if [[ "$healthy" != true ]]; then
+    compose logs --tail=80 caddy web app >&2
+    die "La aplicación inició, pero HTTPS no respondió. Revisa DNS y que los puertos 80/443 estén abiertos."
+fi
+
+echo "Despliegue correcto: https://$app_domain"

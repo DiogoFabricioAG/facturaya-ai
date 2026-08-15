@@ -231,39 +231,53 @@ La IA solo transcribe. La validación de cantidades, precios y cálculo del IGV 
 
 ## Docker/VPS
 
-Para un VPS propio se recomienda mantener el código en un repositorio privado, ejecutar la aplicación con Docker Compose y colocar Caddy, Nginx Proxy Manager o el proxy del proveedor delante del puerto local `8080` para terminar HTTPS.
+Para un VPS propio se mantiene el código en el repositorio privado y se ejecuta con Docker Compose. El archivo `compose.vps.yaml` agrega Caddy delante de la aplicación: publica únicamente 80/443 y obtiene/renueva HTTPS automáticamente cuando el dominio ya apunta al servidor.
 
 Requisitos del servidor: Linux, Docker Engine con el plugin Compose, Git, OpenSSL, un dominio apuntando al VPS y los puertos 80/443 disponibles para el proxy HTTPS.
 
-Primera instalación en el servidor:
+Primera instalación en el servidor. El repositorio privado debe clonarse con una llave SSH o Deploy Key de solo lectura; no incluyas un token de GitHub en la URL:
 
 ```bash
-git clone URL_DEL_REPOSITORIO facturaya-ai
+git clone git@github.com:DiogoFabricioAG/facturaya-ai.git
 cd facturaya-ai
-cp .env.production.example .env.production
 
-# Edita únicamente APP_URL, correo y opciones no sensibles.
-nano .env.production
+# 1. Instala Docker Engine/Compose desde el repositorio APT oficial.
+./deploy/vps.sh prepare
 
-# Solicita la clave OpenAI sin mostrarla y genera los otros secretos.
-./deploy/bootstrap-secrets.sh
+# Cierra la sesión SSH y vuelve a entrar para aplicar el grupo docker.
 
-# Construye, inicia, migra y optimiza Laravel.
-./deploy/deploy.sh
+# 2. Solicita dominio, correo y OpenAI; las entradas sensibles se ocultan.
+./deploy/vps.sh configure
 
-curl --fail http://127.0.0.1:8080/api/health
+# 3. Construye, migra y espera hasta verificar el HTTPS público.
+./deploy/vps.sh deploy
 ```
 
-La aplicación escucha únicamente en `127.0.0.1:8080`; no queda expuesta directamente a Internet. El proxy HTTPS debe enviar el tráfico a ese puerto.
+`prepare` admite Ubuntu y Debian oficiales. No modifica SSH ni activa/desactiva el firewall. La instalación sigue el [repositorio APT oficial de Docker](https://docs.docker.com/engine/install/ubuntu/); no utiliza el script rápido que Docker reserva para desarrollo. Caddy se comunica con Nginx por la red privada de Compose y usa su [HTTPS automático](https://caddyserver.com/docs/automatic-https). La aplicación también permanece disponible en `127.0.0.1:8080` exclusivamente para diagnósticos locales.
 
 No pegues en GitHub, el chat ni comandos con historial la clave OpenAI, Clave SOL, contraseña del certificado, `APP_KEY`, contraseña PostgreSQL o tokens. El `.p12/.pfx`, su contraseña y las credenciales SOL se ingresan directamente en `/platform` únicamente después de habilitar HTTPS. La contraseña del certificado se usa en memoria y no se guarda; el PEM y la Clave SOL quedan cifrados con `APP_KEY` en el almacenamiento persistente.
 
-En cada actualización:
+Operación habitual:
 
 ```bash
-git pull --ff-only
-./deploy/deploy.sh
+# Estado de contenedores, endpoint interno y endpoint HTTPS
+./deploy/vps.sh status
+
+# Logs recientes o seguimiento en vivo
+./deploy/vps.sh logs all
+./deploy/vps.sh logs app --follow
+
+# Recupera el token de /platform solo dentro de la sesión SSH
+./deploy/vps.sh admin-token
+
+# Actualización segura: exige un Git limpio, hace pull --ff-only y despliega
+./deploy/vps.sh update
+
+# PostgreSQL + XML/CDR + secretos, cifrados con una contraseña independiente
+./deploy/vps.sh backup
 ```
+
+El respaldo se guarda como `backups/facturaya-FECHA.tar.gz.enc`, con permisos `600`, y se verifica inmediatamente. Debe copiarse fuera del VPS. No pierdas ni la contraseña del respaldo ni `APP_KEY`.
 
 Antes de producción:
 

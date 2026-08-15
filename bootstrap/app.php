@@ -15,6 +15,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // En producción solo Nginx/Caddy alcanzan PHP-FPM; confiar en el proxy
+        // permite que Laravel detecte correctamente HTTPS y el host original.
+        $middleware->trustProxies(at: '*');
+
         $middleware->alias([
             'company.auth' => AuthenticateCompany::class,
             'platform.admin' => RequirePlatformAdmin::class,

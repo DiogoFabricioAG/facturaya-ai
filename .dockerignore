@@ -13,6 +13,7 @@ storage/framework/sessions/*
 storage/framework/views/*
 storage/logs/*
 secrets
+backups
 database/database.sqlite
 tests
 README.md

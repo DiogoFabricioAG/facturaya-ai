@@ -51,14 +51,20 @@ jobs:
 
       - name: Validar scripts y configuración de producción
         run: |
-          sh -n deploy/bootstrap-secrets.sh deploy/deploy.sh docker/php/entrypoint.sh
+          bash -n deploy/*.sh
+          sh -n deploy/bootstrap-secrets.sh docker/php/entrypoint.sh
           cp .env.production.example .env.production
           mkdir -p secrets
           printf 'base64:MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=' > secrets/app_key
           printf 'ci-database-password' > secrets/db_password
           printf 'ci-platform-token' > secrets/platform_admin_token
           printf 'ci-openai-key' > secrets/openai_api_key
-          docker compose --env-file .env.production config --quiet
+          docker compose --env-file .env.production -f compose.yaml -f compose.vps.yaml config --quiet
+          docker run --rm \
+            -e APP_DOMAIN=facturas.example.com \
+            -e TLS_EMAIL=admin@example.com \
+            --mount type=bind,source="$PWD/docker/caddy/Caddyfile",target=/etc/caddy/Caddyfile,readonly \
+            caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile
 
       - name: Construir imagen de despliegue
         run: |

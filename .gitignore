@@ -5,6 +5,7 @@
 .env.production
 /secrets/*
 !/secrets/.gitignore
+/backups/
 .phpactor.json
 .phpunit.result.cache
 /.codex
