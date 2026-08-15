@@ -15,7 +15,7 @@ jobs:
 
     steps:
       - name: Descargar código
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Preparar PHP
         uses: shivammathur/setup-php@v2
@@ -27,6 +27,17 @@ jobs:
       - name: Instalar dependencias PHP
         run: composer install --no-interaction --prefer-dist --no-progress
 
+      - name: Preparar Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Compilar interfaz
+        run: |
+          npm ci
+          npm run build
+
       - name: Preparar Laravel
         run: |
           cp .env.example .env
@@ -36,14 +47,3 @@ jobs:
         run: |
           php artisan test
           vendor/bin/pint --test
-
-      - name: Preparar Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-
-      - name: Compilar interfaz
-        run: |
-          npm ci
-          npm run build
