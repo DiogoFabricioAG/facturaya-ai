@@ -12,6 +12,7 @@ storage/framework/cache/*
 storage/framework/sessions/*
 storage/framework/views/*
 storage/logs/*
+secrets
 database/database.sqlite
 tests
 README.md

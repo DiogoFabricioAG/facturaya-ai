@@ -48,5 +48,29 @@ jobs:
           php artisan test
           vendor/bin/pint --test
 
+      - name: Validar scripts y configuración de producción
+        run: |
+          sh -n deploy/bootstrap-secrets.sh deploy/deploy.sh docker/php/entrypoint.sh
+          cp .env.production.example .env.production
+          mkdir -p secrets
+          printf 'base64:MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=' > secrets/app_key
+          printf 'ci-database-password' > secrets/db_password
+          printf 'ci-platform-token' > secrets/platform_admin_token
+          printf 'ci-openai-key' > secrets/openai_api_key
+          docker compose --env-file .env.production config --quiet
+
       - name: Construir imagen de despliegue
-        run: docker build --target web -t facturaya-web:ci .
+        run: |
+          docker build --target app -t facturaya-app:ci .
+          docker build --target web -t facturaya-web:ci .
+          docker run --rm \
+            --env-file .env.production \
+            -e APP_KEY_FILE=/run/secrets/app_key \
+            -e DB_PASSWORD_FILE=/run/secrets/db_password \
+            -e PLATFORM_ADMIN_TOKEN_FILE=/run/secrets/platform_admin_token \
+            -e OPENAI_API_KEY_FILE=/run/secrets/openai_api_key \
+            --mount type=bind,source="$PWD/secrets/app_key",target=/run/secrets/app_key,readonly \
+            --mount type=bind,source="$PWD/secrets/db_password",target=/run/secrets/db_password,readonly \
+            --mount type=bind,source="$PWD/secrets/platform_admin_token",target=/run/secrets/platform_admin_token,readonly \
+            --mount type=bind,source="$PWD/secrets/openai_api_key",target=/run/secrets/openai_api_key,readonly \
+            facturaya-app:ci php artisan --version

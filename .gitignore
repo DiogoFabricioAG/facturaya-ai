@@ -3,6 +3,8 @@
 .env
 .env.backup
 .env.production
+/secrets/*
+!/secrets/.gitignore
 .phpactor.json
 .phpunit.result.cache
 /.codex

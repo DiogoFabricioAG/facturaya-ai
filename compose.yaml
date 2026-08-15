@@ -3,11 +3,12 @@ services:
     build:
       context: .
       target: app
-    env_file: .env
+    env_file: .env.production
     environment:
       APP_ENV: production
       APP_DEBUG: "false"
       APP_URL: ${APP_URL:-http://localhost:8080}
+      APP_KEY_FILE: /run/secrets/app_key
       LOG_CHANNEL: stderr
       LOG_LEVEL: ${LOG_LEVEL:-warning}
       DB_CONNECTION: pgsql
@@ -15,7 +16,14 @@ services:
       DB_PORT: 5432
       DB_DATABASE: facturaya
       DB_USERNAME: facturaya
-      DB_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD en el archivo .env del VPS}
+      DB_PASSWORD_FILE: /run/secrets/db_password
+      OPENAI_API_KEY_FILE: /run/secrets/openai_api_key
+      PLATFORM_ADMIN_TOKEN_FILE: /run/secrets/platform_admin_token
+    secrets:
+      - app_key
+      - db_password
+      - openai_api_key
+      - platform_admin_token
     volumes:
       - app_storage:/var/www/html/storage
     depends_on:
@@ -43,7 +51,9 @@ services:
     environment:
       POSTGRES_DB: facturaya
       POSTGRES_USER: facturaya
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD en el archivo .env del VPS}
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -56,3 +66,13 @@ services:
 volumes:
   app_storage:
   postgres_data:
+
+secrets:
+  app_key:
+    file: ./secrets/app_key
+  db_password:
+    file: ./secrets/db_password
+  openai_api_key:
+    file: ./secrets/openai_api_key
+  platform_admin_token:
+    file: ./secrets/platform_admin_token
