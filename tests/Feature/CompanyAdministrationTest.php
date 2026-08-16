@@ -8,6 +8,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
 class CompanyAdministrationTest extends TestCase
@@ -123,6 +124,37 @@ class CompanyAdministrationTest extends TestCase
         $this->assertDatabaseMissing('companies', ['ruc' => '20777777777']);
     }
 
+    public function test_a_legacy_pkcs12_certificate_can_be_imported_securely(): void
+    {
+        Storage::fake('local');
+
+        $company = Company::create([
+            'ruc' => '20888888888',
+            'legal_name' => 'Certificado Legacy S.A.C.',
+            'ubigeo' => '150101',
+            'department' => 'LIMA',
+            'province' => 'LIMA',
+            'district' => 'LIMA',
+            'address' => 'Av. Certificados 456',
+            'sunat_driver' => 'fake',
+            'sunat_environment' => 'beta',
+            'default_series' => 'F001',
+            'default_credit_note_series' => 'FC01',
+        ]);
+        $password = 'legacy-secret';
+        $upload = UploadedFile::fake()->createWithContent('legacy-certificate.p12', $this->fakeLegacyPkcs12($password));
+
+        $path = app(CompanyCertificateStore::class)->store($company, $upload, $password);
+        $company->update(['certificate_path' => $path]);
+
+        $encryptedCertificate = Storage::disk('local')->get($path);
+        $this->assertStringNotContainsString('BEGIN PRIVATE KEY', $encryptedCertificate);
+
+        $storedCertificate = app(CompanyCertificateStore::class)->read($company);
+        $this->assertStringContainsString('BEGIN PRIVATE KEY', $storedCertificate);
+        $this->assertStringContainsString('BEGIN CERTIFICATE', $storedCertificate);
+    }
+
     public function test_admin_routes_reject_an_invalid_platform_token(): void
     {
         config()->set('facturaya.platform.admin_token', 'correct-secret');
@@ -158,5 +190,71 @@ class CompanyAdministrationTest extends TestCase
         $this->assertTrue(openssl_pkcs12_export($certificate, $pkcs12, $privateKey, $password));
 
         return $pkcs12;
+    }
+
+    private function fakeLegacyPkcs12(string $password): string
+    {
+        $options = [
+            'digest_alg' => 'sha256',
+            'private_key_bits' => 2048,
+            'private_key_type' => OPENSSL_KEYTYPE_RSA,
+        ];
+        $bundledConfig = dirname(PHP_BINARY).'/extras/ssl/openssl.cnf';
+
+        if (is_file($bundledConfig)) {
+            $options['config'] = $bundledConfig;
+        }
+
+        $privateKey = openssl_pkey_new($options);
+        $csr = openssl_csr_new([
+            'countryName' => 'PE',
+            'organizationName' => 'FacturaYa Legacy Tests',
+            'commonName' => '20888888888',
+        ], $privateKey, $options);
+        $certificate = openssl_csr_sign($csr, null, $privateKey, 365, $options);
+        $this->assertNotFalse($certificate);
+        $this->assertTrue(openssl_pkey_export($privateKey, $privateKeyPem, null, $options));
+        $this->assertTrue(openssl_x509_export($certificate, $certificatePem));
+
+        $directory = sys_get_temp_dir().DIRECTORY_SEPARATOR.'facturaya-legacy-'.bin2hex(random_bytes(8));
+        $this->assertTrue(mkdir($directory, 0700));
+        $keyPath = $directory.DIRECTORY_SEPARATOR.'key.pem';
+        $certificatePath = $directory.DIRECTORY_SEPARATOR.'certificate.pem';
+        $pkcs12Path = $directory.DIRECTORY_SEPARATOR.'certificate.p12';
+
+        try {
+            file_put_contents($keyPath, $privateKeyPem, LOCK_EX);
+            file_put_contents($certificatePath, $certificatePem, LOCK_EX);
+            @chmod($keyPath, 0600);
+            @chmod($certificatePath, 0600);
+
+            $process = new Process([
+                'openssl',
+                'pkcs12',
+                '-export',
+                '-legacy',
+                '-inkey',
+                $keyPath,
+                '-in',
+                $certificatePath,
+                '-out',
+                $pkcs12Path,
+                '-passout',
+                'stdin',
+            ]);
+            $process->setTimeout(10);
+            $process->setInput($password);
+            $process->mustRun();
+
+            $contents = file_get_contents($pkcs12Path);
+            $this->assertIsString($contents);
+
+            return $contents;
+        } finally {
+            foreach ([$keyPath, $certificatePath, $pkcs12Path] as $path) {
+                @unlink($path);
+            }
+            @rmdir($directory);
+        }
     }
 }

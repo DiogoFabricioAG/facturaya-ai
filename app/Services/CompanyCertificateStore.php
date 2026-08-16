@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
+use Symfony\Component\Process\Process;
+use Throwable;
 
 final class CompanyCertificateStore
 {
@@ -46,10 +48,13 @@ final class CompanyCertificateStore
 
         if (! @openssl_pkcs12_read($contents, $certificates, $password)) {
             $this->clearOpenSslErrors();
+            $certificates = $this->readLegacyPkcs12($contents, $password);
 
-            throw ValidationException::withMessages([
-                'certificate_password' => 'No pudimos abrir el certificado. Revisa la contraseña y confirma que sea un archivo .p12 o .pfx válido.',
-            ]);
+            if ($certificates === null) {
+                throw ValidationException::withMessages([
+                    'certificate_password' => 'No pudimos abrir el certificado. Revisa la contraseña y confirma que sea un archivo .p12 o .pfx válido.',
+                ]);
+            }
         }
 
         $certificate = $certificates['cert'] ?? null;
@@ -90,6 +95,69 @@ final class CompanyCertificateStore
         }
 
         return trim($privateKey).PHP_EOL.trim($certificate).PHP_EOL;
+    }
+
+    /**
+     * OpenSSL 3 deshabilita por defecto algunos cifrados usados por archivos
+     * PKCS#12 antiguos. El fallback activa compatibilidad legacy solo en este
+     * proceso aislado; la contraseña viaja por stdin y nunca por argumentos.
+     *
+     * @return array{cert: string, pkey: string}|null
+     */
+    private function readLegacyPkcs12(string $contents, #[\SensitiveParameter] string $password): ?array
+    {
+        $temporaryPath = tempnam(sys_get_temp_dir(), 'facturaya-p12-');
+
+        if ($temporaryPath === false) {
+            return null;
+        }
+
+        try {
+            @chmod($temporaryPath, 0600);
+
+            if (file_put_contents($temporaryPath, $contents, LOCK_EX) === false) {
+                return null;
+            }
+
+            $process = new Process([
+                'openssl',
+                'pkcs12',
+                '-legacy',
+                '-in',
+                $temporaryPath,
+                '-nodes',
+                '-passin',
+                'stdin',
+            ]);
+            $process->setTimeout(10);
+            $process->setInput($password);
+            $process->run();
+
+            if (! $process->isSuccessful()) {
+                return null;
+            }
+
+            $pem = $process->getOutput();
+            $certificateMatch = [];
+            $privateKeyMatch = [];
+
+            if (preg_match('/-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----/s', $pem, $certificateMatch) !== 1) {
+                return null;
+            }
+
+            if (preg_match('/-----BEGIN (?:[A-Z0-9]+ )?PRIVATE KEY-----.*?-----END (?:[A-Z0-9]+ )?PRIVATE KEY-----/s', $pem, $privateKeyMatch) !== 1) {
+                return null;
+            }
+
+            return [
+                'cert' => $certificateMatch[0],
+                'pkey' => $privateKeyMatch[0],
+            ];
+        } catch (Throwable) {
+            return null;
+        } finally {
+            @unlink($temporaryPath);
+        }
     }
 
     private function clearOpenSslErrors(): void

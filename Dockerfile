@@ -18,6 +18,7 @@ RUN apt-get update \
         libsqlite3-dev \
         libxml2-dev \
         libzip-dev \
+        openssl \
         unzip \
     && docker-php-ext-install -j"$(nproc)" intl pdo_pgsql pdo_sqlite soap zip \
     && rm -rf /var/lib/apt/lists/*
