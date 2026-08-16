@@ -30,6 +30,12 @@ body {
     -webkit-font-smoothing: antialiased;
 }
 
+/* La consola de administración debe cerrar sobre una superficie continua;
+   el degradado general de la app no debe aparecer debajo del footer. */
+body[data-page="platform"] { background: var(--cloud); }
+.platform-content { min-height: 100vh; display: flex; flex-direction: column; background: var(--cloud); }
+.platform-content .platform-main { flex: 1; }
+
 button, input { font: inherit; }
 button { color: inherit; }
 .page-shell { width: min(1440px, 100%); margin: 0 auto; padding: 0 48px; }
