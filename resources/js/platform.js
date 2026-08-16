@@ -18,6 +18,7 @@ if (document.body.dataset.page === 'platform') {
     let platformToken = '';
     let companies = [];
     let editingCompany = null;
+    let drawerCloseTimer = null;
 
     const escapeHtml = (value) => {
         const element = document.createElement('span');
@@ -138,6 +139,7 @@ if (document.body.dataset.page === 'platform') {
     };
 
     const openDrawer = (company = null) => {
+        window.clearTimeout(drawerCloseTimer);
         editingCompany = company;
         companyForm.reset();
         if (company) {
@@ -165,9 +167,21 @@ if (document.body.dataset.page === 'platform') {
         syncCredentialRequirements();
         companyFormError.hidden = true;
         drawer.hidden = false;
+        drawer.setAttribute('aria-hidden', 'false');
         document.body.classList.add('no-scroll');
+        window.requestAnimationFrame(() => drawer.classList.add('is-open'));
     };
-    const closeDrawer = () => { drawer.hidden = true; document.body.classList.remove('no-scroll'); editingCompany = null; };
+    const closeDrawer = () => {
+        if (drawer.hidden) return;
+        drawer.classList.remove('is-open');
+        drawer.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('no-scroll');
+        editingCompany = null;
+        const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        drawerCloseTimer = window.setTimeout(() => {
+            if (!drawer.classList.contains('is-open')) drawer.hidden = true;
+        }, reducedMotion ? 0 : 340);
+    };
     document.querySelector('#open-company-form').addEventListener('click', openDrawer);
     document.querySelector('#close-company-form').addEventListener('click', closeDrawer);
     drawer.addEventListener('click', (event) => { if (event.target === drawer) closeDrawer(); });

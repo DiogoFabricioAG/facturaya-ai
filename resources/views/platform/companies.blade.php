@@ -57,7 +57,7 @@
         <footer><span>FacturaYa AI · Administración</span><span>Credenciales y certificados cifrados con APP_KEY</span></footer>
     </div>
 
-    <div id="company-drawer" class="drawer-backdrop" hidden>
+    <div id="company-drawer" class="drawer-backdrop" aria-hidden="true" hidden>
         <section class="company-drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
             <header><div><p id="company-drawer-kicker" class="eyebrow">Nuevo expediente</p><h2 id="drawer-title">Registrar empresa emisora</h2></div><button id="close-company-form" class="drawer-close" type="button" aria-label="Cerrar">×</button></header>
             <form id="company-form">
