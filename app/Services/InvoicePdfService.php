@@ -59,10 +59,11 @@ final class InvoicePdfService
 
         $lines[] = ['rule' => true];
         $lines[] = ['text' => sprintf('%-55s %16s', 'Valor de venta', $this->money($draft->subtotal)), 'size' => 9];
-        $lines[] = ['text' => sprintf('%-55s %16s', 'IGV (18%%)', $this->money($draft->igv)), 'size' => 9];
+        $lines[] = ['text' => sprintf('%-55s %16s', 'IGV (18%)', $this->money($draft->igv)), 'size' => 9];
         $lines[] = ['text' => sprintf('%-55s %16s', 'TOTAL', $this->money($draft->total)), 'size' => 12, 'bold' => true];
         $lines[] = ['text' => ''];
-        $lines[] = ['text' => 'Estado SUNAT: '.strtoupper((string) $invoice->status).' · Codigo: '.($invoice->sunat_code ?: '—'), 'size' => 8];
+        $sunatCode = $invoice->sunat_code !== null ? (string) $invoice->sunat_code : '—';
+        $lines[] = ['text' => 'Estado SUNAT: '.strtoupper((string) $invoice->status).' · Codigo: '.$sunatCode, 'size' => 8];
         $lines[] = ['text' => (string) $invoice->sunat_message, 'size' => 8];
         $lines[] = ['text' => 'Representacion impresa del comprobante electronico.', 'size' => 8];
 
