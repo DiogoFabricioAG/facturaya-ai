@@ -167,9 +167,13 @@ if (document.body.dataset.page === 'platform') {
         syncCredentialRequirements();
         companyFormError.hidden = true;
         drawer.hidden = false;
+        drawer.classList.remove('is-open');
         drawer.setAttribute('aria-hidden', 'false');
         document.body.classList.add('no-scroll');
-        window.requestAnimationFrame(() => drawer.classList.add('is-open'));
+        // Force the closed layout to be painted before enabling the open state;
+        // this keeps the entrance transition reliable across browsers.
+        void drawer.offsetWidth;
+        window.requestAnimationFrame(() => window.requestAnimationFrame(() => drawer.classList.add('is-open')));
     };
     const closeDrawer = () => {
         if (drawer.hidden) return;
