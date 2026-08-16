@@ -21,8 +21,11 @@ info "Iniciando servicios"
 compose up -d --remove-orphans
 
 info "Aplicando migraciones y cachés de Laravel"
-compose exec -T app php artisan migrate --force
-compose exec -T app php artisan optimize
+# `docker compose exec` crea un proceso nuevo y no hereda las variables que el
+# entrypoint exportó para php-fpm. Ejecutamos Artisan mediante el mismo
+# entrypoint para cargar APP_KEY, DB_PASSWORD y los demás Docker Secrets.
+compose exec -T app facturaya-entrypoint php artisan migrate --force
+compose exec -T app facturaya-entrypoint php artisan optimize
 
 info "Esperando HTTPS"
 healthy=false
