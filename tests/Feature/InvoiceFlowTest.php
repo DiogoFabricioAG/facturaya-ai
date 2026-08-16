@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Company;
 use App\Models\CreditNote;
+use App\Models\Customer;
 use App\Models\InvoiceDraft;
 use App\Services\CompanyApiTokenService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -39,6 +40,33 @@ class InvoiceFlowTest extends TestCase
             ->getJson('/api/company')
             ->assertOk()
             ->assertJsonPath('data.ruc', $this->company->ruc);
+    }
+
+    public function test_saved_customers_are_scoped_to_the_company(): void
+    {
+        [, $secondToken] = $this->createCompany('20222222222', 'Empresa Dos S.A.C.');
+
+        $saved = $this->withToken($this->companyToken)
+            ->postJson('/api/customers', [
+                'ruc' => '20666666666',
+                'name' => 'Cliente Frecuente S.A.C.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.ruc', '20666666666')
+            ->assertJsonPath('data.name', 'Cliente Frecuente S.A.C.');
+
+        $this->assertSame($this->company->id, Customer::firstOrFail()->company_id);
+
+        $this->withToken($this->companyToken)
+            ->getJson('/api/customers')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $saved->json('data.id'));
+
+        $this->withToken($secondToken)
+            ->getJson('/api/customers')
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
     }
 
     public function test_it_imports_a_document_and_calculates_included_igv(): void

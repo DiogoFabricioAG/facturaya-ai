@@ -73,6 +73,13 @@
                         <span class="section-number">1</span>
                         <div><h2>¿A quién facturamos?</h2><p>Datos del cliente que recibirá la factura.</p></div>
                     </div>
+                    <label class="field saved-customer-field">
+                        <span>Cliente guardado</span>
+                        <select id="saved-customer" aria-label="Seleccionar un cliente guardado">
+                            <option value="">Escribir un cliente nuevo</option>
+                        </select>
+                        <small id="saved-customer-help">Tus clientes guardados solo están disponibles dentro de esta empresa.</small>
+                    </label>
                     <div class="form-grid">
                         <label class="field">
                             <span>RUC del cliente</span>
@@ -147,7 +154,17 @@
                         <small>Estamos convirtiendo la entrada en una lista revisable.</small>
                     </div>
                     <div id="draft-preview" class="draft-preview" hidden>
-                        <div class="client-summary"><span>Cliente</span><strong id="summary-client"></strong><small id="summary-ruc"></small><small id="summary-company" class="summary-company"></small></div>
+                        <div class="client-summary">
+                            <span>Cliente</span>
+                            <strong id="summary-client"></strong>
+                            <small id="summary-ruc"></small>
+                            <small id="summary-company" class="summary-company"></small>
+                            <label id="save-customer-choice" class="save-customer-choice">
+                                <input id="save-customer" type="checkbox">
+                                <span><strong>¿Deseas guardar los datos de este cliente para una próxima ocasión?</strong><small>Se guardará solo para esta empresa.</small></span>
+                            </label>
+                            <p id="customer-save-status" class="customer-save-status" role="status" hidden></p>
+                        </div>
                         <div id="warnings" class="warnings" hidden></div>
                         <div class="table-scroll">
                             <table class="items-table">

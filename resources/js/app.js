@@ -6,6 +6,10 @@ if (document.body.dataset.page === 'invoice') {
     const productsText = document.querySelector('#products-text');
     const productsTextCount = document.querySelector('#products-text-count');
     const analyzeButton = document.querySelector('#analyze-button');
+    const savedCustomer = document.querySelector('#saved-customer');
+    const saveCustomerChoice = document.querySelector('#save-customer-choice');
+    const saveCustomerCheckbox = document.querySelector('#save-customer');
+    const customerSaveStatus = document.querySelector('#customer-save-status');
     const emptyPreview = document.querySelector('#empty-preview');
     const loadingPreview = document.querySelector('#loading-preview');
     const draftPreview = document.querySelector('#draft-preview');
@@ -30,6 +34,7 @@ if (document.body.dataset.page === 'invoice') {
     let draft = null;
     let company = null;
     let companyToken = '';
+    let customers = [];
     let autoSaveTimer = null;
     let autoSaveChain = Promise.resolve();
     let creditSourceDraft = null;
@@ -126,7 +131,58 @@ if (document.body.dataset.page === 'invoice') {
         const connected = await api('/api/company');
         sessionStorage.setItem('facturaya_company_token', companyToken);
         renderCompany(connected);
+        await loadCustomers();
         await loadRecent();
+    };
+
+    const loadCustomers = async () => {
+        customers = await api('/api/customers');
+        const selected = savedCustomer.value;
+        savedCustomer.innerHTML = '<option value="">Escribir un cliente nuevo</option>';
+        customers.forEach((customer) => {
+            const option = document.createElement('option');
+            option.value = customer.id;
+            option.textContent = `${customer.name} · RUC ${customer.ruc}`;
+            savedCustomer.appendChild(option);
+        });
+        savedCustomer.value = customers.some((customer) => customer.id === selected) ? selected : '';
+    };
+
+    const findCustomerByRuc = (ruc) => customers.find((customer) => customer.ruc === String(ruc || '').trim());
+
+    const syncCustomerPrompt = () => {
+        const ruc = form.elements.customer_ruc.value.trim();
+        const existing = findCustomerByRuc(ruc);
+        if (existing) {
+            saveCustomerChoice.hidden = true;
+            customerSaveStatus.textContent = 'Este cliente ya está guardado para esta empresa.';
+            customerSaveStatus.hidden = false;
+            saveCustomerCheckbox.checked = false;
+            return;
+        }
+
+        customerSaveStatus.hidden = true;
+        saveCustomerChoice.hidden = !/^\d{11}$/.test(ruc) || form.elements.customer_name.value.trim() === '';
+    };
+
+    const saveCustomerIfRequested = async () => {
+        if (!saveCustomerCheckbox.checked) return;
+
+        const customer = await api('/api/customers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                ruc: form.elements.customer_ruc.value.trim(),
+                name: form.elements.customer_name.value.trim(),
+            }),
+        });
+
+        await loadCustomers();
+        savedCustomer.value = customer.id;
+        saveCustomerChoice.hidden = true;
+        saveCustomerCheckbox.checked = false;
+        customerSaveStatus.textContent = 'Cliente guardado para la próxima ocasión.';
+        customerSaveStatus.hidden = false;
     };
 
     const disconnectCompany = () => {
@@ -173,6 +229,7 @@ if (document.body.dataset.page === 'invoice') {
         document.querySelector('#summary-client').textContent = draft.customer.name;
         document.querySelector('#summary-ruc').textContent = `RUC ${draft.customer.ruc} · ${draft.issue_date}`;
         document.querySelector('#summary-company').textContent = `Emisor: ${draft.company.legal_name} · RUC ${draft.company.ruc}`;
+        syncCustomerPrompt();
         draftStatus.textContent = draft.status === 'issued' ? 'Emitida' : 'Lista para revisar';
         draftStatus.className = `status-badge ${draft.status === 'issued' ? 'is-issued' : 'is-ready'}`;
 
@@ -205,6 +262,10 @@ if (document.body.dataset.page === 'invoice') {
         draftStatus.className = 'status-badge';
         setAutosaveStatus('Los cambios se guardan automáticamente');
         issueButton.disabled = false;
+        savedCustomer.value = '';
+        saveCustomerCheckbox.checked = false;
+        saveCustomerChoice.hidden = true;
+        customerSaveStatus.hidden = true;
         showNotice('');
         setStep('source');
         const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -668,6 +729,7 @@ if (document.body.dataset.page === 'invoice') {
         setBusy(issueButton, true, 'Enviando…');
         try {
             await flushAutoSave();
+            await saveCustomerIfRequested();
             setStep('sunat');
             const invoice = await api(`/api/invoice-drafts/${draft.id}/issue`, { method: 'POST' });
             draft.status = invoice.status === 'accepted' ? 'issued' : 'issue_failed';
@@ -691,7 +753,18 @@ if (document.body.dataset.page === 'invoice') {
         scheduleAutoSave();
     });
     ['customer_ruc', 'customer_name', 'issue_date'].forEach((name) => {
-        form.elements[name].addEventListener('input', scheduleAutoSave);
+        form.elements[name].addEventListener('input', () => {
+            if (name !== 'issue_date') syncCustomerPrompt();
+            scheduleAutoSave();
+        });
+    });
+    savedCustomer.addEventListener('change', () => {
+        const selected = customers.find((customer) => customer.id === savedCustomer.value);
+        if (!selected) return;
+        form.elements.customer_ruc.value = selected.ruc;
+        form.elements.customer_name.value = selected.name;
+        syncCustomerPrompt();
+        if (draft) scheduleAutoSave();
     });
     form.querySelectorAll('input[name="tax_mode"]').forEach((input) => input.addEventListener('change', () => {
         refreshPreviewTotals();

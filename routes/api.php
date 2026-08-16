@@ -3,6 +3,7 @@
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\CompanyTokenController;
 use App\Http\Controllers\CreditNoteController;
+use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\InvoiceDraftController;
 use App\Http\Resources\CompanyResource;
@@ -23,6 +24,8 @@ Route::prefix('admin')->middleware('platform.admin')->group(function (): void {
 
 Route::middleware('company.auth')->group(function (): void {
     Route::get('/company', fn (CompanyContext $context) => new CompanyResource($context->company()));
+    Route::get('/customers', [CustomerController::class, 'index']);
+    Route::post('/customers', [CustomerController::class, 'store']);
     Route::get('/invoice-drafts', [InvoiceDraftController::class, 'index']);
     Route::post('/invoice-drafts/import', [InvoiceDraftController::class, 'store']);
     Route::get('/invoice-drafts/{invoiceDraft}', [InvoiceDraftController::class, 'show']);

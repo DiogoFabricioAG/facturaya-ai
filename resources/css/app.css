@@ -163,6 +163,10 @@ h2 { margin: 0; font-size: 20px; line-height: 1.25; letter-spacing: -.025em; }
 }
 
 .field input:focus, .item-input:focus { border-color: var(--cobalt); box-shadow: 0 0 0 3px rgba(49,85,217,.12); }
+.saved-customer-field { margin-bottom: 18px; }
+.saved-customer-field select { width: 100%; height: 44px; border: 1px solid #cfd6e2; border-radius: 0; outline: none; padding: 0 12px; color: var(--ink); background: white; font-size: 12px; }
+.saved-customer-field select:focus { border-color: var(--cobalt); box-shadow: 0 0 0 3px rgba(49,85,217,.10); }
+.saved-customer-field small { color: var(--muted); font-size: 10px; line-height: 1.45; }
 .field small { position: absolute; right: 10px; top: 41px; color: #9199aa; font-size: 10px; pointer-events: none; }
 .divider { height: 1px; margin: 34px 0; background: var(--line); }
 .tax-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -242,6 +246,12 @@ h2 { margin: 0; font-size: 20px; line-height: 1.25; letter-spacing: -.025em; }
 .client-summary strong { font-size: 14px; }
 .client-summary small { color: var(--muted); font-family: 'IBM Plex Mono', monospace; }
 .client-summary .summary-company { margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--line); color: var(--cobalt); }
+.save-customer-choice { display: flex; align-items: flex-start; gap: 10px; margin-top: 13px; padding: 12px 13px; border: 1px solid #c8d1e1; color: var(--ink); background: #f7f9ff; cursor: pointer; }
+.save-customer-choice input { width: 17px; height: 17px; flex: 0 0 auto; margin: 1px 0 0; accent-color: var(--cobalt); }
+.save-customer-choice > span { display: grid; gap: 3px; }
+.save-customer-choice strong { font-size: 11px; line-height: 1.35; }
+.save-customer-choice small { color: var(--muted); font-size: 9px; }
+.customer-save-status { margin: 12px 0 0; color: var(--mint-dark); font: 600 9px/1.4 'IBM Plex Mono', monospace; }
 .warnings { margin-top: 13px; padding: 11px 13px; color: #765516; background: #fff5d9; border-left: 3px solid var(--amber); font-size: 11px; line-height: 1.5; }
 .warnings p { margin: 3px 0; }
 .table-scroll { overflow-x: auto; margin-top: 22px; }

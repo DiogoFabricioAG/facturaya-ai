@@ -38,6 +38,11 @@ class Company extends Model
         return $this->hasMany(InvoiceDraft::class);
     }
 
+    public function customers(): HasMany
+    {
+        return $this->hasMany(Customer::class);
+    }
+
     public function invoices(): HasMany
     {
         return $this->hasMany(Invoice::class);
