@@ -160,6 +160,15 @@ class InvoiceFlowTest extends TestCase
         Storage::disk('local')->assertExists($invoice->xml_path);
         Storage::disk('local')->assertExists($invoice->cdr_path);
 
+        $pdf = $this->withToken($this->companyToken)
+            ->get('/api/invoices/'.$invoice->id.'/files/pdf');
+
+        $pdf
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF-1.4', $pdf->getContent());
+        $this->assertStringContainsString('F001-00000001', $pdf->getContent());
+
         $this->withToken($this->companyToken)
             ->postJson('/api/invoice-drafts/'.$created['id'].'/issue')
             ->assertOk()

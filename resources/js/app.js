@@ -496,6 +496,13 @@ if (document.body.dataset.page === 'invoice') {
         body.innerHTML = recent.map((item) => {
             const [label, status] = statusLabel(item);
             const notes = item.invoice?.credit_notes || [];
+            const invoiceFiles = item.invoice?.files || {};
+            const invoiceFileList = item.invoice?.status === 'accepted'
+                ? `<div class="invoice-file-list">
+                    ${invoiceFiles.pdf ? `<button class="document-file-link document-file-pdf" type="button" data-file-url="${escapeHtml(invoiceFiles.pdf)}">PDF</button>` : ''}
+                    ${invoiceFiles.xml ? `<button class="document-file-link" type="button" data-file-url="${escapeHtml(invoiceFiles.xml)}">XML</button>` : ''}
+                    ${invoiceFiles.cdr ? `<button class="document-file-link" type="button" data-file-url="${escapeHtml(invoiceFiles.cdr)}">CDR</button>` : ''}
+                </div>` : '';
             const noteList = notes.length ? `<div class="credit-note-list">${notes.map((note) => `
                 <span class="credit-note-chip"><strong>${escapeHtml(note.number)}</strong><small>${escapeHtml(note.status === 'accepted' ? 'NC aceptada' : note.status)}</small>
                     ${note.files?.xml ? `<button class="document-file-link" type="button" data-file-url="${escapeHtml(note.files.xml)}">XML</button>` : ''}
@@ -507,7 +514,7 @@ if (document.body.dataset.page === 'invoice') {
             return `<tr>
                 <td><span class="mono-date">${escapeHtml(item.issue_date)}</span></td>
                 <td><strong>${escapeHtml(item.customer.name)}</strong><small>RUC ${escapeHtml(item.customer.ruc)}</small></td>
-                <td><strong>${escapeHtml(item.invoice?.number || 'Borrador')}</strong>${noteList}</td>
+                <td><strong>${escapeHtml(item.invoice?.number || 'Borrador')}</strong>${invoiceFileList}${noteList}</td>
                 <td><strong>${money(item.totals.total, item.currency)}</strong></td>
                 <td><span class="activity-status status-${escapeHtml(status)}">${escapeHtml(label)}</span></td>
                 <td>${action}</td>

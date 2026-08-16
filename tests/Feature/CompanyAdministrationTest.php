@@ -164,6 +164,44 @@ class CompanyAdministrationTest extends TestCase
             ->assertUnauthorized();
     }
 
+    public function test_admin_can_edit_company_configuration_without_replacing_secrets(): void
+    {
+        config()->set('facturaya.platform.admin_token', 'platform-secret');
+        $company = Company::create([
+            'ruc' => '20999999999',
+            'legal_name' => 'Empresa Original S.A.C.',
+            'trade_name' => 'Original',
+            'ubigeo' => '150101',
+            'department' => 'LIMA',
+            'province' => 'LIMA',
+            'district' => 'LIMA',
+            'address' => 'Av. Inicial 123',
+            'sunat_driver' => 'fake',
+            'sunat_environment' => 'beta',
+            'sol_user' => 'SOLUSER',
+            'sol_password' => 'SOLPASS',
+            'default_series' => 'F001',
+            'default_credit_note_series' => 'FC01',
+            'active' => true,
+        ]);
+
+        $this->withToken('platform-secret')
+            ->putJson('/api/admin/companies/'.$company->id, [
+                'legal_name' => 'Empresa Actualizada S.A.C.',
+                'sunat_environment' => 'production',
+                'default_series' => 'F002',
+                'active' => false,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.legal_name', 'Empresa Actualizada S.A.C.')
+            ->assertJsonPath('data.sunat_environment', 'production')
+            ->assertJsonPath('data.default_series', 'F002')
+            ->assertJsonPath('data.active', false);
+
+        $this->assertSame('SOLUSER', $company->fresh()->sol_user);
+        $this->assertSame('SOLPASS', $company->fresh()->sol_password);
+    }
+
     private function fakePkcs12(string $password): string
     {
         $options = [

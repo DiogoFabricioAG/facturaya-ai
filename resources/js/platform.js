@@ -8,8 +8,16 @@ if (document.body.dataset.page === 'platform') {
     const companyForm = document.querySelector('#company-form');
     const companyFormError = document.querySelector('#company-form-error');
     const tokenDialog = document.querySelector('#token-dialog');
+    const drawerKicker = document.querySelector('#company-drawer-kicker');
+    const drawerTitle = document.querySelector('#drawer-title');
+    const saveCompanyButton = document.querySelector('#save-company');
+    const tokenNameField = document.querySelector('#token-name-field');
+    const tokenNameInput = companyForm.querySelector('[name="token_name"]');
+    const activeInput = companyForm.querySelector('[name="active"]');
+    const certificateHelp = document.querySelector('#certificate-help');
     let platformToken = '';
     let companies = [];
+    let editingCompany = null;
 
     const escapeHtml = (value) => {
         const element = document.createElement('span');
@@ -63,6 +71,7 @@ if (document.body.dataset.page === 'platform') {
                 <div class="file-location"><span>Domicilio fiscal</span><strong>${escapeHtml(item.fiscal_address.district)}, ${escapeHtml(item.fiscal_address.department)}</strong><small>${escapeHtml(item.fiscal_address.address)}</small></div>
                 <div class="file-sunat"><span class="mode-chip mode-${escapeHtml(item.sunat_driver)}">${item.sunat_driver === 'greenter' ? 'Greenter' : 'Simulación'}</span><small>${escapeHtml(item.sunat_environment)} · Fact. ${escapeHtml(item.default_series)} · NC ${escapeHtml(item.default_credit_note_series)}</small></div>
                 <span class="file-status ${item.active ? 'is-active' : ''}">${item.active ? 'Activa' : 'Inactiva'}</span>
+                <div class="file-actions"><button class="edit-company-button" type="button" data-edit-company-id="${escapeHtml(item.id)}">Editar</button></div>
             </article>
         `).join('');
     };
@@ -106,31 +115,102 @@ if (document.body.dataset.page === 'platform') {
         tokenInput.focus();
     });
 
-    const openDrawer = () => {
+    const setDrawerMode = () => {
+        const isEditing = Boolean(editingCompany);
+        drawerKicker.textContent = isEditing ? 'Editar expediente' : 'Nuevo expediente';
+        drawerTitle.textContent = isEditing ? 'Actualiza la empresa emisora' : 'Registrar empresa emisora';
+        tokenNameField.hidden = isEditing;
+        tokenNameInput.required = !isEditing;
+        saveCompanyButton.dataset.originalLabel = isEditing ? 'Guardar cambios' : 'Registrar y generar token';
+        saveCompanyButton.querySelector('span').textContent = isEditing ? 'Guardar cambios' : 'Registrar y generar token';
+        certificateHelp.textContent = isEditing && editingCompany?.sunat_credentials_configured
+            ? 'Ya hay un certificado guardado. Sube otro solo si necesitas reemplazarlo.'
+            : 'Sube el archivo original; nosotros lo preparamos para Greenter.';
+    };
+
+    const syncCredentialRequirements = () => {
+        const real = document.querySelector('#sunat-driver').value === 'greenter';
+        const credentials = document.querySelector('#sunat-credentials');
+        credentials.hidden = !real;
+        credentials.querySelectorAll('input').forEach((input) => {
+            input.required = real && !editingCompany;
+        });
+    };
+
+    const openDrawer = (company = null) => {
+        editingCompany = company;
+        companyForm.reset();
+        if (company) {
+            const address = company.fiscal_address || {};
+            Object.entries({
+                ruc: company.ruc,
+                legal_name: company.legal_name,
+                trade_name: company.trade_name || '',
+                ubigeo: address.ubigeo,
+                department: address.department,
+                province: address.province,
+                district: address.district,
+                address: address.address,
+                sunat_driver: company.sunat_driver,
+                sunat_environment: company.sunat_environment,
+                default_series: company.default_series,
+                default_credit_note_series: company.default_credit_note_series,
+                active: company.active ? '1' : '0',
+            }).forEach(([name, value]) => {
+                const field = companyForm.elements.namedItem(name);
+                if (field) field.value = value ?? '';
+            });
+        }
+        setDrawerMode();
+        syncCredentialRequirements();
         companyFormError.hidden = true;
         drawer.hidden = false;
         document.body.classList.add('no-scroll');
     };
-    const closeDrawer = () => { drawer.hidden = true; document.body.classList.remove('no-scroll'); };
+    const closeDrawer = () => { drawer.hidden = true; document.body.classList.remove('no-scroll'); editingCompany = null; };
     document.querySelector('#open-company-form').addEventListener('click', openDrawer);
     document.querySelector('#close-company-form').addEventListener('click', closeDrawer);
     drawer.addEventListener('click', (event) => { if (event.target === drawer) closeDrawer(); });
 
     document.querySelector('#sunat-driver').addEventListener('change', (event) => {
-        const real = event.target.value === 'greenter';
-        const credentials = document.querySelector('#sunat-credentials');
-        credentials.hidden = !real;
-        credentials.querySelectorAll('input').forEach((input) => { input.required = real; });
+        syncCredentialRequirements();
+    });
+
+    document.querySelector('#company-list').addEventListener('click', (event) => {
+        const trigger = event.target.closest('[data-edit-company-id]');
+        if (!trigger) return;
+        const company = companies.find((item) => item.id === trigger.dataset.editCompanyId);
+        if (company) openDrawer(company);
     });
 
     companyForm.addEventListener('submit', async (event) => {
         event.preventDefault();
         const button = document.querySelector('#save-company');
         companyFormError.hidden = true;
-        setBusy(button, true, 'Registrando…');
+        setBusy(button, true, editingCompany ? 'Guardando…' : 'Registrando…');
         showNotice('');
         try {
-            const payload = await api('/api/admin/companies', { method: 'POST', body: new FormData(companyForm) });
+            const formData = new FormData(companyForm);
+            const isEditing = Boolean(editingCompany);
+            let endpoint = '/api/admin/companies';
+            if (isEditing) {
+                endpoint += `/${editingCompany.id}`;
+                formData.append('_method', 'PUT');
+                formData.delete('token_name');
+                ['sol_user', 'sol_password', 'certificate_password'].forEach((name) => {
+                    if (!formData.get(name)) formData.delete(name);
+                });
+                if (!formData.get('certificate') || !formData.get('certificate').name) formData.delete('certificate');
+                formData.set('active', activeInput.value === '1' ? '1' : '0');
+            }
+            const payload = await api(endpoint, { method: 'POST', body: formData });
+            if (isEditing) {
+                closeDrawer();
+                companyForm.reset();
+                await loadCompanies();
+                showNotice('Cambios guardados. La empresa sigue lista para usar.', 'success');
+                return;
+            }
             document.querySelector('#issued-token-value').textContent = payload.api_token;
             closeDrawer();
             tokenDialog.hidden = false;
@@ -139,6 +219,7 @@ if (document.body.dataset.page === 'platform') {
             const credentials = document.querySelector('#sunat-credentials');
             credentials.hidden = true;
             credentials.querySelectorAll('input').forEach((input) => { input.required = false; });
+            setDrawerMode();
             await loadCompanies();
         } catch (error) {
             companyFormError.textContent = error.message;

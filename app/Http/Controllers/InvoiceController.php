@@ -7,9 +7,11 @@ use App\Models\Invoice;
 use App\Models\InvoiceDraft;
 use App\Services\CompanyContext;
 use App\Services\InvoiceSequenceService;
+use App\Services\InvoicePdfService;
 use App\Services\Sunat\SunatGatewayManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
@@ -79,9 +81,23 @@ class InvoiceController extends Controller
             ->setStatusCode(201);
     }
 
-    public function file(Invoice $invoice, string $type, CompanyContext $context): StreamedResponse|JsonResponse
+    public function file(
+        Invoice $invoice,
+        string $type,
+        CompanyContext $context,
+        InvoicePdfService $pdfs,
+    ): Response|StreamedResponse|JsonResponse
     {
         abort_unless($context->owns($invoice->company_id), 404);
+
+        if ($type === 'pdf') {
+            abort_unless($invoice->status === 'accepted', 404);
+
+            return response($pdfs->render($invoice), 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="'.$invoice->number.'.pdf"',
+            ]);
+        }
 
         $path = match ($type) {
             'xml' => $invoice->xml_path,

@@ -340,6 +340,8 @@ h2 { margin: 0; font-size: 20px; line-height: 1.25; letter-spacing: -.025em; }
 .credit-note-trigger:disabled { opacity: .5; cursor: wait; }
 .action-unavailable { color: #9ca4b4; font-size: 9px; white-space: nowrap; }
 .credit-note-list { display: grid; gap: 5px; margin-top: 7px; }
+.invoice-file-list { display: flex; align-items: center; gap: 9px; margin-top: 7px; }
+.invoice-file-list .document-file-pdf { color: #176a51; font-weight: 800; }
 .credit-note-chip { display: flex; align-items: center; gap: 6px; width: max-content; padding-left: 7px; border-left: 3px solid var(--coral); }
 .credit-note-chip strong, .credit-note-chip small { display: inline !important; margin: 0 !important; }
 .credit-note-chip strong { color: #9a3e32; font: 600 9px 'IBM Plex Mono', monospace; }
@@ -358,7 +360,7 @@ h2 { margin: 0; font-size: 20px; line-height: 1.25; letter-spacing: -.025em; }
 .platform-metrics small { grid-column: 2; margin-top: 5px; color: var(--muted); font-size: 10px; }
 .company-registry { border: 1px solid var(--line); background: white; }
 .company-list { padding: 0 30px 10px; }
-.company-file { display: grid; grid-template-columns: 46px minmax(240px, 1.3fr) minmax(210px, 1fr) 150px 65px; align-items: center; gap: 20px; min-height: 108px; border-bottom: 1px solid var(--line); }
+.company-file { display: grid; grid-template-columns: 46px minmax(240px, 1.3fr) minmax(210px, 1fr) 150px 65px 88px; align-items: center; gap: 20px; min-height: 108px; border-bottom: 1px solid var(--line); }
 .file-index { color: #a2a9b7; font: 500 10px 'IBM Plex Mono', monospace; }
 .file-identity h3 { margin: 4px 0 2px; font-size: 15px; }
 .file-identity p, .file-location small { margin: 0; color: var(--muted); font-size: 10px; }
@@ -371,6 +373,9 @@ h2 { margin: 0; font-size: 20px; line-height: 1.25; letter-spacing: -.025em; }
 .mode-fake { color: #745417; background: #fff1c9; }
 .file-status { color: #9ca3b0; font: 600 9px 'IBM Plex Mono', monospace; text-transform: uppercase; }
 .file-status.is-active { color: #168761; }
+.file-actions { display: flex; justify-content: flex-end; }
+.edit-company-button { border: 1px solid #b8c4dc; padding: 8px 10px; color: var(--cobalt); background: white; font-size: 9px; font-weight: 800; cursor: pointer; }
+.edit-company-button:hover { border-color: var(--cobalt); background: #f4f7ff; }
 .registry-empty { padding: 55px 20px; color: var(--muted); text-align: center; font-size: 13px; }
 
 .platform-access-visual { background: #182849; }
@@ -440,6 +445,7 @@ h2 { margin: 0; font-size: 20px; line-height: 1.25; letter-spacing: -.025em; }
 .certificate-lock { width: 33px; height: 33px; display: grid; flex: 0 0 auto; place-items: center; color: var(--ink); background: var(--mint); }
 .certificate-lock svg { width: 19px; }
 .certificate-fields { display: grid; grid-template-columns: 1.12fr .88fr; gap: 17px; padding: 17px; }
+.certificate-existing { display: block; margin: 0 17px 17px; padding: 10px 12px; color: var(--mint-dark); background: #e9fbf4; font-size: 10px; }
 .certificate-field { display: grid; align-content: start; gap: 8px; min-height: 96px; padding: 13px; border: 1px dashed #aeb8c9; background: white; font-size: 11px; font-weight: 700; }
 .certificate-field input { max-width: 100%; color: var(--muted); font-size: 10px; }
 .certificate-field small, .certificate-password small { color: var(--muted); font-size: 9px; font-weight: 400; line-height: 1.45; }
@@ -466,7 +472,7 @@ footer { min-height: 74px; display: flex; align-items: center; justify-content: 
     .product-nav { gap: 18px; margin-right: 18px; }
     .company-switcher { max-width: 230px; }
     .platform-hero { align-items: flex-start; flex-direction: column; }
-    .company-file { grid-template-columns: 34px 1fr 1fr 120px; gap: 14px; }
+    .company-file { grid-template-columns: 34px 1fr 1fr 120px auto; gap: 14px; }
     .company-file .file-status { display: none; }
     .form-grid.three-columns { grid-template-columns: 1fr 1fr; }
 }
@@ -481,6 +487,7 @@ footer { min-height: 74px; display: flex; align-items: center; justify-content: 
     .platform-metrics > div + div { border-top: 1px solid var(--line); border-left: 0; }
     .company-file { grid-template-columns: 30px 1fr auto; padding: 18px 0; }
     .file-location { display: none; }
+    .file-actions { grid-column: 3; grid-row: 1; }
 }
 
 @media (max-width: 620px) {
@@ -508,6 +515,7 @@ footer { min-height: 74px; display: flex; align-items: center; justify-content: 
     .company-list { padding: 0 18px 8px; }
     .company-file { grid-template-columns: 24px 1fr; }
     .company-file .file-sunat { display: none; }
+    .company-file .file-actions { grid-column: 2; grid-row: auto; justify-content: flex-start; margin-top: 8px; }
     .platform-hero h1 { font-size: 42px; }
     .company-drawer { width: 100%; padding: 26px 18px 40px; }
     .credit-note-drawer { width: 100%; padding: 24px 16px 36px; }

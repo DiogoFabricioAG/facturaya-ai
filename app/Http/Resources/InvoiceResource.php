@@ -20,6 +20,7 @@ class InvoiceResource extends JsonResource
                 'notes' => $this->sunat_notes ?? [],
             ],
             'files' => [
+                'pdf' => $this->status === 'accepted' ? route('api.invoices.file', [$this->id, 'pdf']) : null,
                 'xml' => $this->xml_path ? route('api.invoices.file', [$this->id, 'xml']) : null,
                 'cdr' => $this->cdr_path ? route('api.invoices.file', [$this->id, 'cdr']) : null,
             ],

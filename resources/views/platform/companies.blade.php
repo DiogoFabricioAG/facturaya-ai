@@ -59,7 +59,7 @@
 
     <div id="company-drawer" class="drawer-backdrop" hidden>
         <section class="company-drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
-            <header><div><p class="eyebrow">Nuevo expediente</p><h2 id="drawer-title">Registrar empresa emisora</h2></div><button id="close-company-form" class="drawer-close" type="button" aria-label="Cerrar">×</button></header>
+            <header><div><p id="company-drawer-kicker" class="eyebrow">Nuevo expediente</p><h2 id="drawer-title">Registrar empresa emisora</h2></div><button id="close-company-form" class="drawer-close" type="button" aria-label="Cerrar">×</button></header>
             <form id="company-form">
                 <div class="drawer-section"><span class="drawer-section-label">Identidad fiscal</span>
                     <div class="form-grid">
@@ -83,7 +83,8 @@
                         <label class="field"><span>Entorno SUNAT</span><select name="sunat_environment"><option value="beta">Beta / pruebas</option><option value="production">Producción</option></select></label>
                         <label class="field"><span>Serie de facturas</span><input name="default_series" value="F001" maxlength="4" required></label>
                         <label class="field"><span>Serie de notas de crédito</span><input name="default_credit_note_series" value="FC01" maxlength="4" required></label>
-                        <label class="field"><span>Nombre del token</span><input name="token_name" value="Sistema principal" required></label>
+                        <label id="token-name-field" class="field"><span>Nombre del token</span><input name="token_name" value="Sistema principal" required></label>
+                        <label class="field"><span>Estado</span><select name="active"><option value="1">Activa</option><option value="0">Inactiva</option></select></label>
                     </div>
                     <div id="sunat-credentials" class="sunat-credentials" hidden>
                         <label class="field"><span>Usuario SOL</span><input name="sol_user" autocomplete="off"></label>
@@ -91,7 +92,7 @@
                         <div class="certificate-box">
                             <div class="certificate-box-heading">
                                 <span class="certificate-lock" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M7.5 10V7.5a4.5 4.5 0 0 1 9 0V10m-10 0h11a2 2 0 0 1 2 2v7h-15v-7a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.7"/><path d="M12 14v2.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>
-                                <div><strong>Certificado digital de la empresa</strong><small>Sube el archivo original; nosotros lo preparamos para Greenter.</small></div>
+                                <div><strong>Certificado digital de la empresa</strong><small id="certificate-help">Sube el archivo original; nosotros lo preparamos para Greenter.</small></div>
                             </div>
                             <div class="certificate-fields">
                                 <label class="certificate-field"><span>Archivo .p12 o .pfx</span><input name="certificate" type="file" accept=".p12,.pfx,application/x-pkcs12"><small>Normalmente es el archivo descargado de SUNAT o de tu proveedor.</small></label>

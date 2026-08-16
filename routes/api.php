@@ -29,7 +29,7 @@ Route::middleware('company.auth')->group(function (): void {
     Route::put('/invoice-drafts/{invoiceDraft}', [InvoiceDraftController::class, 'update']);
     Route::post('/invoice-drafts/{invoiceDraft}/issue', [InvoiceController::class, 'store']);
     Route::get('/invoices/{invoice}/files/{type}', [InvoiceController::class, 'file'])
-        ->whereIn('type', ['xml', 'cdr'])
+        ->whereIn('type', ['pdf', 'xml', 'cdr'])
         ->name('api.invoices.file');
     Route::get('/invoices/{invoice}/credit-notes', [CreditNoteController::class, 'index']);
     Route::post('/invoices/{invoice}/credit-notes', [CreditNoteController::class, 'store']);
