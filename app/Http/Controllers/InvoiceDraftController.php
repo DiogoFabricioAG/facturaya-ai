@@ -11,6 +11,7 @@ use App\Services\CompanyContext;
 use App\Services\InvoiceDraftCalculator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Storage;
@@ -21,13 +22,14 @@ use Throwable;
 
 class InvoiceDraftController extends Controller
 {
-    public function index(CompanyContext $context): AnonymousResourceCollection
+    public function index(Request $request, CompanyContext $context): AnonymousResourceCollection
     {
+        $perPage = min(max($request->integer('per_page', 10), 1), 100);
         $drafts = InvoiceDraft::query()
             ->where('company_id', $context->company()->id)
             ->with(['company', 'invoice.creditNotes'])
             ->latest()
-            ->paginate(10);
+            ->paginate($perPage);
 
         return InvoiceDraftResource::collection($drafts);
     }

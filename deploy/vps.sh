@@ -13,6 +13,7 @@ case "$command_name" in
     status) exec "$script_dir/status.sh" "$@" ;;
     logs) exec "$script_dir/logs.sh" "$@" ;;
     backup) exec "$script_dir/backup.sh" "$@" ;;
+    sync-ruc) exec bash "$script_dir/sync-ruc.sh" "$@" ;;
     admin-token) exec "$script_dir/admin-token.sh" "$@" ;;
     help|-h|--help)
         cat <<'EOF'
@@ -25,6 +26,7 @@ FacturaYa AI - administración del VPS
   ./deploy/vps.sh status              Comprueba contenedores y endpoints
   ./deploy/vps.sh logs [servicio]     Muestra logs (all/app/web/database/caddy)
   ./deploy/vps.sh backup              Genera un respaldo cifrado y verificable
+  ./deploy/vps.sh sync-ruc [--force]  Sincroniza RUC y razones sociales desde SUNAT
   ./deploy/vps.sh admin-token         Muestra el token de /platform tras confirmar
 
 Para seguir logs: ./deploy/vps.sh logs app --follow

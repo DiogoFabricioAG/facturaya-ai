@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Models\CreditNote;
 use App\Models\Customer;
 use App\Models\InvoiceDraft;
+use App\Models\SunatTaxpayer;
 use App\Services\CompanyApiTokenService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -67,6 +68,57 @@ class InvoiceFlowTest extends TestCase
             ->getJson('/api/customers')
             ->assertOk()
             ->assertJsonCount(0, 'data');
+    }
+
+    public function test_customer_lookup_reuses_a_saved_company_customer(): void
+    {
+        Customer::query()->create([
+            'company_id' => $this->company->id,
+            'ruc' => '20557288016',
+            'name' => 'CLIENTE GUARDADO S.A.C.',
+        ]);
+
+        $this->withToken($this->companyToken)
+            ->getJson('/api/customers/lookup/20557288016')
+            ->assertOk()
+            ->assertJsonPath('data.ruc', '20557288016')
+            ->assertJsonPath('data.name', 'CLIENTE GUARDADO S.A.C.')
+            ->assertJsonPath('meta.source', 'saved');
+    }
+
+    public function test_customer_lookup_uses_the_official_sunat_padron_and_saves_the_customer(): void
+    {
+        SunatTaxpayer::query()->create([
+            'ruc' => '20557288016',
+            'legal_name' => 'EMPRESA DESDE SUNAT S.A.C.',
+            'status' => 'ACTIVO',
+            'condition' => 'HABIDO',
+            'ubigeo' => '150101',
+            'fiscal_address' => 'LIMA',
+            'synced_at' => now(),
+        ]);
+
+        $this->withToken($this->companyToken)
+            ->getJson('/api/customers/lookup/20557288016')
+            ->assertOk()
+            ->assertJsonPath('data.name', 'EMPRESA DESDE SUNAT S.A.C.')
+            ->assertJsonPath('meta.source', 'sunat_padron')
+            ->assertJsonPath('meta.status', 'ACTIVO')
+            ->assertJsonPath('meta.condition', 'HABIDO');
+
+        $this->assertDatabaseHas('customers', [
+            'company_id' => $this->company->id,
+            'ruc' => '20557288016',
+            'name' => 'EMPRESA DESDE SUNAT S.A.C.',
+        ]);
+    }
+
+    public function test_customer_lookup_reports_when_the_sunat_padron_is_not_synchronized(): void
+    {
+        $this->withToken($this->companyToken)
+            ->getJson('/api/customers/lookup/20557288016')
+            ->assertStatus(503)
+            ->assertJsonPath('message', 'La consulta automática de RUC todavía no está disponible.');
     }
 
     public function test_it_imports_a_document_and_calculates_included_igv(): void
@@ -231,6 +283,23 @@ class InvoiceFlowTest extends TestCase
         $secondInvoice
             ->assertJsonPath('data.company_id', $secondCompany->id)
             ->assertJsonPath('data.number', 'F001-00000001');
+    }
+
+    public function test_invoice_draft_listing_accepts_a_safe_page_size_for_integrations(): void
+    {
+        $this->createDraftForToken($this->companyToken);
+        $this->createDraftForToken($this->companyToken);
+
+        $this->withToken($this->companyToken)
+            ->getJson('/api/invoice-drafts?per_page=1')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('meta.per_page', 1);
+
+        $this->withToken($this->companyToken)
+            ->getJson('/api/invoice-drafts?per_page=1000')
+            ->assertOk()
+            ->assertJsonPath('meta.per_page', 100);
     }
 
     public function test_it_issues_a_full_credit_note_against_an_accepted_invoice(): void

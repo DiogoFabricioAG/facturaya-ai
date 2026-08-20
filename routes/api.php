@@ -24,6 +24,7 @@ Route::prefix('admin')->middleware('platform.admin')->group(function (): void {
 
 Route::middleware('company.auth')->group(function (): void {
     Route::get('/company', fn (CompanyContext $context) => new CompanyResource($context->company()));
+    Route::get('/customers/lookup/{ruc}', [CustomerController::class, 'lookup']);
     Route::get('/customers', [CustomerController::class, 'index']);
     Route::post('/customers', [CustomerController::class, 'store']);
     Route::get('/invoice-drafts', [InvoiceDraftController::class, 'index']);
