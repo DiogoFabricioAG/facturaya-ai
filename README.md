@@ -204,7 +204,6 @@ Requieren un token `fya_...`.
 | Método | Ruta | Uso |
 |---|---|---|
 | `GET` | `/api/company` | Verifica token y obtiene empresa activa |
-| `GET` | `/api/customers/lookup/{ruc}` | Obtiene la razón social desde clientes guardados o el padrón oficial SUNAT |
 | `POST` | `/api/invoice-drafts/import` | Sube archivo y crea borrador |
 | `GET` | `/api/invoice-drafts/{id}` | Obtiene borrador y cálculo |
 | `PUT` | `/api/invoice-drafts/{id}` | Corrige líneas y recalcula |
@@ -216,18 +215,6 @@ Requieren un token `fya_...`.
 | `GET` | `/api/credit-notes/{id}/files/{xml|cdr}` | Descarga archivos de la nota |
 
 Un token de la empresa A obtiene `404` al intentar acceder a recursos de la empresa B. Las dos pueden usar `F001-00000001` porque los correlativos y restricciones son por empresa.
-
-### Identificación automática por RUC
-
-FacturaYa resuelve `RUC → razón social` primero desde los clientes guardados de la empresa y luego desde una copia local del [Padrón Reducido RUC oficial de SUNAT](https://www.sunat.gob.pe/descargaPRR/mrc137_padron_reducido.html). Cuando encuentra un contribuyente en el padrón, lo guarda como cliente frecuente de esa empresa para no repetir la búsqueda.
-
-Después del primer despliegue y periódicamente cuando SUNAT actualice el archivo:
-
-```bash
-./deploy/vps.sh sync-ruc
-```
-
-El proceso descarga el ZIP de forma temporal, lo importa por lotes y conserva su `ETag` para omitir descargas sin cambios. Las credenciales SOL cifradas de cada empresa siguen utilizándose exclusivamente para emitir mediante Greenter. La identificación de clientes usa el padrón público porque las APIs REST de SUNAT requieren además credenciales de aplicación (`client_id` y `client_secret`) y el servicio documentado de consulta integrada valida comprobantes, no devuelve la razón social.
 
 ## Extracción real con OpenAI
 
@@ -288,9 +275,6 @@ Operación habitual:
 
 # PostgreSQL + XML/CDR + secretos, cifrados con una contraseña independiente
 ./deploy/vps.sh backup
-
-# Descarga e importa el padrón oficial de SUNAT; las siguientes ejecuciones omiten archivos sin cambios
-./deploy/vps.sh sync-ruc
 ```
 
 El respaldo se guarda como `backups/facturaya-FECHA.tar.gz.enc`, con permisos `600`, y se verifica inmediatamente. Debe copiarse fuera del VPS. No pierdas ni la contraseña del respaldo ni `APP_KEY`.
