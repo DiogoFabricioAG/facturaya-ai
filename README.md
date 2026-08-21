@@ -204,6 +204,7 @@ Requieren un token `fya_...`.
 | Método | Ruta | Uso |
 |---|---|---|
 | `GET` | `/api/company` | Verifica token y obtiene empresa activa |
+| `GET` | `/api/customers/lookup/{ruc}` | Obtiene la razón social desde clientes guardados, caché o proveedores RUC |
 | `POST` | `/api/invoice-drafts/import` | Sube archivo y crea borrador |
 | `GET` | `/api/invoice-drafts/{id}` | Obtiene borrador y cálculo |
 | `PUT` | `/api/invoice-drafts/{id}` | Corrige líneas y recalcula |
@@ -215,6 +216,8 @@ Requieren un token `fya_...`.
 | `GET` | `/api/credit-notes/{id}/files/{xml|cdr}` | Descarga archivos de la nota |
 
 Un token de la empresa A obtiene `404` al intentar acceder a recursos de la empresa B. Las dos pueden usar `F001-00000001` porque los correlativos y restricciones son por empresa.
+
+La consulta automática de RUC está documentada en [`docs/contracts/ruc-lookup.md`](docs/contracts/ruc-lookup.md). FacturaYa usa el cliente guardado primero, ApiPeruDev como proveedor principal y OpenRUC como respaldo. El token de ApiPeruDev vive únicamente en el VPS.
 
 ## Extracción real con OpenAI
 

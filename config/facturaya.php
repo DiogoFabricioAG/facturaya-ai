@@ -20,4 +20,13 @@ return [
         'default_driver' => env('SUNAT_DEFAULT_DRIVER', 'fake'),
         'default_environment' => env('SUNAT_DEFAULT_ENVIRONMENT', 'beta'),
     ],
+
+    'ruc_lookup' => [
+        'api_peru_url' => env('RUC_LOOKUP_API_PERU_URL', 'https://api.apiperu.dev/ruc'),
+        'api_peru_token' => env('RUC_LOOKUP_API_PERU_TOKEN'),
+        'openruc_url' => env('RUC_LOOKUP_OPENRUC_URL', 'https://openruc.com/api/ruc'),
+        'connect_timeout' => (int) env('RUC_LOOKUP_CONNECT_TIMEOUT', 3),
+        'timeout' => (int) env('RUC_LOOKUP_TIMEOUT', 6),
+        'cache_ttl' => (int) env('RUC_LOOKUP_CACHE_TTL', 86400),
+    ],
 ];

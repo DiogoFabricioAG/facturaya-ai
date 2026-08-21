@@ -9,6 +9,7 @@ use App\Models\InvoiceDraft;
 use App\Services\CompanyApiTokenService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -51,7 +52,7 @@ class InvoiceFlowTest extends TestCase
                 'ruc' => '20666666666',
                 'name' => 'Cliente Frecuente S.A.C.',
             ])
-            ->assertOk()
+            ->assertCreated()
             ->assertJsonPath('data.ruc', '20666666666')
             ->assertJsonPath('data.name', 'Cliente Frecuente S.A.C.');
 
@@ -67,6 +68,98 @@ class InvoiceFlowTest extends TestCase
             ->getJson('/api/customers')
             ->assertOk()
             ->assertJsonCount(0, 'data');
+    }
+
+    public function test_customer_lookup_uses_api_peru_and_caches_the_result(): void
+    {
+        config()->set('facturaya.ruc_lookup.api_peru_token', 'api-peru-test-token');
+        Http::fake([
+            'https://api.apiperu.dev/ruc' => Http::response([
+                'success' => true,
+                'data' => [
+                    'ruc' => '20557288016',
+                    'nombre_o_razon_social' => 'AGU BELLO E.I.R.L.',
+                    'estado' => 'ACTIVO',
+                    'condicion' => 'HABIDO',
+                    'direccion_completa' => 'LIMA - LIMA - SAN JUAN DE LURIGANCHO',
+                    'ubigeo_sunat' => '150132',
+                ],
+            ]),
+        ]);
+
+        $this->withToken($this->companyToken)
+            ->getJson('/api/customers/lookup/20557288016')
+            ->assertOk()
+            ->assertJsonPath('data.name', 'AGU BELLO E.I.R.L.')
+            ->assertJsonPath('meta.source', 'api_peru')
+            ->assertJsonPath('meta.provider', 'api_peru')
+            ->assertJsonPath('meta.condition', 'HABIDO');
+
+        [, $secondToken] = $this->createCompany('20233333333', 'Empresa Tres S.A.C.');
+        $this->withToken($secondToken)
+            ->getJson('/api/customers/lookup/20557288016')
+            ->assertOk()
+            ->assertJsonPath('data.name', 'AGU BELLO E.I.R.L.')
+            ->assertJsonPath('meta.source', 'cache');
+
+        Http::assertSentCount(1);
+        Http::assertSent(fn ($request): bool => $request->hasHeader('Authorization', 'Bearer api-peru-test-token')
+            && $request['ruc'] === '20557288016');
+    }
+
+    public function test_customer_lookup_falls_back_to_openruc_when_api_peru_is_unavailable(): void
+    {
+        config()->set('facturaya.ruc_lookup.api_peru_token', 'api-peru-test-token');
+        Http::fake([
+            'https://api.apiperu.dev/ruc' => Http::response(['code' => 'quota_exceeded'], 429),
+            'https://openruc.com/api/ruc/20557288016' => Http::response([
+                'ruc' => '20557288016',
+                'razon_social' => 'AGU BELLO E.I.R.L.',
+                'estado' => 'ACTIVO',
+                'condicion' => 'HABIDO',
+                'direccion' => 'LIMA',
+                'ubigeo' => '150132',
+                'source' => 'SUNAT',
+                'as_of' => '2026-08-20',
+            ]),
+        ]);
+
+        $this->withToken($this->companyToken)
+            ->getJson('/api/customers/lookup/20557288016')
+            ->assertOk()
+            ->assertJsonPath('meta.source', 'openruc')
+            ->assertJsonPath('meta.provider', 'openruc')
+            ->assertJsonPath('data.name', 'AGU BELLO E.I.R.L.');
+
+        Http::assertSentCount(2);
+    }
+
+    public function test_customer_lookup_returns_not_found_when_both_providers_do_not_find_the_ruc(): void
+    {
+        config()->set('facturaya.ruc_lookup.api_peru_token', 'api-peru-test-token');
+        Http::fake([
+            'https://api.apiperu.dev/ruc' => Http::response(['success' => false], 404),
+            'https://openruc.com/api/ruc/20557288016' => Http::response([], 404),
+        ]);
+
+        $this->withToken($this->companyToken)
+            ->getJson('/api/customers/lookup/20557288016')
+            ->assertNotFound()
+            ->assertJsonPath('message', 'No se encontró el RUC.');
+    }
+
+    public function test_customer_lookup_returns_service_unavailable_when_both_providers_fail(): void
+    {
+        config()->set('facturaya.ruc_lookup.api_peru_token', 'api-peru-test-token');
+        Http::fake([
+            'https://api.apiperu.dev/ruc' => Http::response([], 503),
+            'https://openruc.com/api/ruc/20557288016' => Http::response([], 503),
+        ]);
+
+        $this->withToken($this->companyToken)
+            ->getJson('/api/customers/lookup/20557288016')
+            ->assertStatus(503)
+            ->assertJsonPath('message', 'El servicio de consulta RUC no está disponible temporalmente.');
     }
 
     public function test_it_imports_a_document_and_calculates_included_igv(): void
