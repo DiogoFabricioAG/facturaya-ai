@@ -447,6 +447,14 @@ if (document.body.dataset.page === 'invoice') {
         return [labels[item.status] || item.status, item.status];
     };
 
+    const sunatResultMessage = (invoice) => {
+        if (String(invoice.sunat?.code) === '0111') {
+            return `${invoice.number}: SUNAT bloqueó el envío porque el usuario SOL no tiene el perfil “Envío de documentos electrónicos-Grandes emisores”. Configura un usuario SOL secundario con ese perfil y vuelve a intentarlo.`;
+        }
+
+        return `${invoice.number}: ${invoice.sunat?.message || 'SUNAT no devolvió un mensaje.'}`;
+    };
+
     const closeCreditNote = () => {
         creditDrawer.hidden = true;
         creditSourceDraft = null;
@@ -592,6 +600,8 @@ if (document.body.dataset.page === 'invoice') {
             let action = '<span class="action-unavailable">Sin acciones</span>';
             if (item.invoice?.status === 'accepted') {
                 action = `<button class="credit-note-trigger" type="button" data-credit-draft-id="${item.id}">+ Nota de crédito</button>`;
+            } else if (item.invoice?.status === 'error' && item.status === 'issue_failed') {
+                action = `<button class="retry-invoice-trigger" type="button" data-retry-draft-id="${item.id}">Reintentar envío</button>`;
             } else if (item.status === 'review_required' && !item.invoice) {
                 action = `<button class="review-draft-trigger" type="button" data-review-draft-id="${item.id}" aria-label="Revisar borrador de ${escapeHtml(item.customer.name)}">Revisar y emitir</button>`;
             }
@@ -609,9 +619,15 @@ if (document.body.dataset.page === 'invoice') {
     document.querySelector('#recent-body').addEventListener('click', async (event) => {
         const creditTrigger = event.target.closest('[data-credit-draft-id]');
         const reviewTrigger = event.target.closest('[data-review-draft-id]');
+        const retryTrigger = event.target.closest('[data-retry-draft-id]');
         const fileButton = event.target.closest('[data-file-url]');
         try {
-            if (reviewTrigger) {
+            if (retryTrigger) {
+                setBusy(retryTrigger, true, 'Reintentando…');
+                const invoice = await api(`/api/invoice-drafts/${retryTrigger.dataset.retryDraftId}/issue`, { method: 'POST' });
+                await loadRecent();
+                showNotice(sunatResultMessage(invoice), invoice.status === 'accepted' ? 'success' : 'error');
+            } else if (reviewTrigger) {
                 setBusy(reviewTrigger, true, 'Abriendo…');
                 await openDraftForReview(reviewTrigger.dataset.reviewDraftId);
                 showNotice('Borrador abierto. Revisa los datos y pulsa “Emitir factura” cuando todo esté correcto.', 'success');
@@ -628,6 +644,7 @@ if (document.body.dataset.page === 'invoice') {
                 fileButton.disabled = false;
             }
         } catch (error) {
+            if (retryTrigger) setBusy(retryTrigger, false, '');
             if (reviewTrigger) setBusy(reviewTrigger, false, '');
             if (creditTrigger) creditTrigger.disabled = false;
             if (fileButton) fileButton.disabled = false;
@@ -769,7 +786,7 @@ if (document.body.dataset.page === 'invoice') {
             draftStatus.className = `status-badge ${invoice.status === 'accepted' ? 'is-issued' : ''}`;
             issueButton.disabled = invoice.status === 'accepted';
             await loadRecent();
-            showNotice(`${invoice.number}: ${invoice.sunat.message}`, invoice.status === 'accepted' ? 'success' : 'error');
+            showNotice(sunatResultMessage(invoice), invoice.status === 'accepted' ? 'success' : 'error');
         } catch (error) {
             setStep('review');
             showNotice(error.message, 'error');

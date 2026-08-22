@@ -25,24 +25,50 @@ class InvoiceController extends Controller
     ): JsonResponse {
         abort_unless($context->owns($invoiceDraft->company_id), 404);
         $company = $context->company();
-        $existing = $invoiceDraft->invoice;
+        $invoice = $invoiceDraft->invoice;
+        $statusCode = 201;
 
-        if ($existing) {
-            return (new InvoiceResource($existing))->response();
+        if ($invoice) {
+            if ($invoice->status !== 'error') {
+                return (new InvoiceResource($invoice))->response();
+            }
+
+            if ($invoiceDraft->status !== 'issue_failed' || ! $invoiceDraft->items()->exists()) {
+                return response()->json(['message' => 'La factura no está disponible para reintentar.'], 409);
+            }
+
+            $claimed = Invoice::query()
+                ->whereKey($invoice->id)
+                ->where('status', 'error')
+                ->update([
+                    'status' => 'processing',
+                    'sunat_code' => null,
+                    'sunat_message' => null,
+                    'sunat_notes' => null,
+                    'cdr_path' => null,
+                    'issued_at' => null,
+                ]);
+
+            if ($claimed === 0) {
+                return (new InvoiceResource($invoice->fresh()))->response();
+            }
+
+            $invoice = $invoice->fresh();
+            $statusCode = 200;
+        } else {
+            if ($invoiceDraft->status !== 'review_required' || ! $invoiceDraft->items()->exists()) {
+                return response()->json(['message' => 'El borrador aún no está listo para emitir.'], 409);
+            }
+
+            $series = $company->default_series;
+            $invoice = Invoice::create([
+                'company_id' => $company->id,
+                'invoice_draft_id' => $invoiceDraft->id,
+                'series' => $series,
+                'correlative' => $sequences->next($company, $series),
+                'status' => 'processing',
+            ]);
         }
-
-        if ($invoiceDraft->status !== 'review_required' || ! $invoiceDraft->items()->exists()) {
-            return response()->json(['message' => 'El borrador aún no está listo para emitir.'], 409);
-        }
-
-        $series = $company->default_series;
-        $invoice = Invoice::create([
-            'company_id' => $company->id,
-            'invoice_draft_id' => $invoiceDraft->id,
-            'series' => $series,
-            'correlative' => $sequences->next($company, $series),
-            'status' => 'processing',
-        ]);
 
         $invoiceDraft->update(['status' => 'issuing']);
 
@@ -78,7 +104,7 @@ class InvoiceController extends Controller
 
         return (new InvoiceResource($invoice->fresh()))
             ->response()
-            ->setStatusCode(201);
+            ->setStatusCode($statusCode);
     }
 
     public function file(

@@ -5,7 +5,9 @@ namespace Tests\Feature;
 use App\Models\Company;
 use App\Models\CreditNote;
 use App\Models\Customer;
+use App\Models\Invoice;
 use App\Models\InvoiceDraft;
+use App\Models\InvoiceSequence;
 use App\Services\CompanyApiTokenService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -324,6 +326,46 @@ class InvoiceFlowTest extends TestCase
         $secondInvoice
             ->assertJsonPath('data.company_id', $secondCompany->id)
             ->assertJsonPath('data.number', 'F001-00000001');
+    }
+
+    public function test_it_retries_a_technical_delivery_error_without_consuming_another_correlative(): void
+    {
+        $draftId = $this->createDraftForToken($this->companyToken);
+        $draft = InvoiceDraft::findOrFail($draftId);
+        $draft->update(['status' => 'issue_failed']);
+
+        $invoice = Invoice::create([
+            'company_id' => $this->company->id,
+            'invoice_draft_id' => $draft->id,
+            'series' => 'F001',
+            'correlative' => 2,
+            'status' => 'error',
+            'sunat_code' => '0111',
+            'sunat_message' => 'Rejected by policy.',
+        ]);
+        InvoiceSequence::create([
+            'company_id' => $this->company->id,
+            'series' => 'F001',
+            'next_number' => 3,
+        ]);
+
+        $retried = $this->withToken($this->companyToken)
+            ->postJson('/api/invoice-drafts/'.$draftId.'/issue');
+
+        $retried
+            ->assertOk()
+            ->assertJsonPath('data.id', $invoice->id)
+            ->assertJsonPath('data.number', 'F001-00000002')
+            ->assertJsonPath('data.status', 'accepted')
+            ->assertJsonPath('data.sunat.code', '0');
+
+        $this->assertDatabaseCount('invoices', 1);
+        $this->assertDatabaseHas('company_invoice_sequences', [
+            'company_id' => $this->company->id,
+            'series' => 'F001',
+            'next_number' => 3,
+        ]);
+        $this->assertSame('issued', $draft->fresh()->status);
     }
 
     public function test_it_issues_a_full_credit_note_against_an_accepted_invoice(): void
