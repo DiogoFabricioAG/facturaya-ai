@@ -452,6 +452,10 @@ if (document.body.dataset.page === 'invoice') {
             return `${invoice.number}: SUNAT todavía no reconoce la autorización del usuario para el servicio web. Si ya habilitaste Envío de Documentos Electrónicos por Servicio Web, terminaste con Siguiente → Grabar y puedes verlo al ingresar con el usuario secundario, no necesitas otro permiso para emitir: espera a que SUNAT propague el cambio y reintenta este mismo comprobante más tarde.`;
         }
 
+        if (String(invoice.sunat?.code) === 'HTTP' && /bad request/i.test(String(invoice.sunat?.message))) {
+            return `${invoice.number}: SUNAT devolvió HTTP 400 antes de generar el CDR. El comprobante no fue registrado; no crees otro número. Puedes reintentar este mismo envío más tarde.`;
+        }
+
         return `${invoice.number}: ${invoice.sunat?.message || 'SUNAT no devolvió un mensaje.'}`;
     };
 

@@ -19,8 +19,8 @@ use Greenter\Model\Sale\Invoice;
 use Greenter\Model\Sale\Legend;
 use Greenter\Model\Sale\Note;
 use Greenter\Model\Sale\SaleDetail;
-use Greenter\See;
 use Greenter\Ws\Services\SunatEndpoints;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 
@@ -45,6 +45,8 @@ final class GreenterSunatGateway implements SunatGateway
 
         if ($result === null || ! $result->isSuccess()) {
             $error = $result?->getError();
+
+            $this->logRejectedTransport($see, $company, $invoice->number, $error?->getCode(), $error?->getMessage());
 
             return [
                 'status' => 'error',
@@ -92,6 +94,8 @@ final class GreenterSunatGateway implements SunatGateway
         if ($result === null || ! $result->isSuccess()) {
             $error = $result?->getError();
 
+            $this->logRejectedTransport($see, $company, $creditNote->number, $error?->getCode(), $error?->getMessage());
+
             return [
                 'status' => 'error',
                 'code' => (string) ($error?->getCode() ?? 'CONNECTION_ERROR'),
@@ -123,13 +127,13 @@ final class GreenterSunatGateway implements SunatGateway
         ];
     }
 
-    private function makeSee(StoredCompany $company): See
+    private function makeSee(StoredCompany $company): DiagnosticSee
     {
         if (! $company->hasSunatCredentials()) {
             throw new RuntimeException('La empresa no tiene certificado, usuario SOL y contraseña SOL completos.');
         }
 
-        $see = new See;
+        $see = new DiagnosticSee;
         $see->setCertificate($this->certificates->read($company));
         $see->setService(
             $company->sunat_environment === 'production'
@@ -143,6 +147,23 @@ final class GreenterSunatGateway implements SunatGateway
         );
 
         return $see;
+    }
+
+    private function logRejectedTransport(
+        DiagnosticSee $see,
+        StoredCompany $company,
+        string $documentNumber,
+        string|int|null $code,
+        ?string $message,
+    ): void {
+        Log::warning('SUNAT rejected the electronic document transport', [
+            'company_id' => $company->id,
+            'document_number' => $documentNumber,
+            'environment' => $company->sunat_environment,
+            'sunat_code' => (string) ($code ?? 'CONNECTION_ERROR'),
+            'sunat_message' => (string) ($message ?? 'SUNAT no devolvió una respuesta.'),
+            'transport' => $see->transportDiagnostics(),
+        ]);
     }
 
     private function makeInvoice(InvoiceDraft $draft, StoredInvoice $storedInvoice, StoredCompany $storedCompany): Invoice
