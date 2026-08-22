@@ -351,9 +351,11 @@ h2 { margin: 0; font-size: 20px; line-height: 1.25; letter-spacing: -.025em; }
 .status-review_required { color: #745417; background: #fff1c9; }
 .status-rejected, .status-issue_failed, .status-failed { color: #94372d; background: #ffebe7; }
 .status-analyzing { color: #29469e; background: #e9eeff; }
-.credit-note-trigger { min-height: 32px; border: 1px solid #b8c4dc; padding: 0 11px; color: var(--cobalt); background: white; font-size: 9px; font-weight: 800; white-space: nowrap; cursor: pointer; }
-.credit-note-trigger:hover { border-color: var(--cobalt); background: #f4f7ff; }
-.credit-note-trigger:disabled { opacity: .5; cursor: wait; }
+.credit-note-trigger, .review-draft-trigger { min-height: 32px; border: 1px solid #b8c4dc; padding: 0 11px; color: var(--cobalt); background: white; font-size: 9px; font-weight: 800; white-space: nowrap; cursor: pointer; }
+.credit-note-trigger:hover, .review-draft-trigger:hover { border-color: var(--cobalt); background: #f4f7ff; }
+.credit-note-trigger:disabled, .review-draft-trigger:disabled { opacity: .5; cursor: wait; }
+.review-draft-trigger { border-color: var(--cobalt); color: white; background: var(--cobalt); }
+.review-draft-trigger:hover { color: white; background: #163fca; }
 .action-unavailable { color: #9ca4b4; font-size: 9px; white-space: nowrap; }
 .credit-note-list { display: grid; gap: 5px; margin-top: 7px; }
 .invoice-file-list { display: flex; align-items: center; gap: 9px; margin-top: 7px; }

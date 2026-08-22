@@ -222,6 +222,14 @@ if (document.body.dataset.page === 'invoice') {
 
     const renderDraft = (value) => {
         draft = value;
+        form.elements.customer_ruc.value = draft.customer.ruc || '';
+        form.elements.customer_name.value = draft.customer.name || '';
+        form.elements.issue_date.value = draft.issue_date || '';
+        form.querySelectorAll('input[name="tax_mode"]').forEach((input) => {
+            input.checked = input.value === draft.tax_mode;
+        });
+        const savedDraftCustomer = customers.find((customer) => customer.ruc === draft.customer.ruc);
+        savedCustomer.value = savedDraftCustomer?.id || '';
         emptyPreview.hidden = true;
         loadingPreview.hidden = true;
         draftPreview.hidden = false;
@@ -530,6 +538,18 @@ if (document.body.dataset.page === 'invoice') {
         setTimeout(() => creditReasonCode.focus(), 50);
     };
 
+    const openDraftForReview = async (draftId) => {
+        clearTimeout(autoSaveTimer);
+        await autoSaveChain.catch(() => {});
+        const selectedDraft = await api(`/api/invoice-drafts/${draftId}`);
+
+        if (selectedDraft.status !== 'review_required' || selectedDraft.invoice) {
+            throw new Error('Este borrador ya no está disponible para revisión. Actualiza la lista e inténtalo otra vez.');
+        }
+
+        renderDraft(selectedDraft);
+    };
+
     const downloadProtectedFile = async (url) => {
         const response = await fetch(url, { headers: { Authorization: `Bearer ${companyToken}` } });
         if (!response.ok) throw new Error('El archivo ya no está disponible.');
@@ -569,9 +589,12 @@ if (document.body.dataset.page === 'invoice') {
                     ${note.files?.xml ? `<button class="document-file-link" type="button" data-file-url="${escapeHtml(note.files.xml)}">XML</button>` : ''}
                     ${note.files?.cdr ? `<button class="document-file-link" type="button" data-file-url="${escapeHtml(note.files.cdr)}">CDR</button>` : ''}
                 </span>`).join('')}</div>` : '';
-            const action = item.invoice?.status === 'accepted'
-                ? `<button class="credit-note-trigger" type="button" data-credit-draft-id="${item.id}">+ Nota de crédito</button>`
-                : '<span class="action-unavailable">Disponible al aceptar</span>';
+            let action = '<span class="action-unavailable">Sin acciones</span>';
+            if (item.invoice?.status === 'accepted') {
+                action = `<button class="credit-note-trigger" type="button" data-credit-draft-id="${item.id}">+ Nota de crédito</button>`;
+            } else if (item.status === 'review_required' && !item.invoice) {
+                action = `<button class="review-draft-trigger" type="button" data-review-draft-id="${item.id}" aria-label="Revisar borrador de ${escapeHtml(item.customer.name)}">Revisar y emitir</button>`;
+            }
             return `<tr>
                 <td><span class="mono-date">${escapeHtml(item.issue_date)}</span></td>
                 <td><strong>${escapeHtml(item.customer.name)}</strong><small>RUC ${escapeHtml(item.customer.ruc)}</small></td>
@@ -584,20 +607,29 @@ if (document.body.dataset.page === 'invoice') {
     }
 
     document.querySelector('#recent-body').addEventListener('click', async (event) => {
-        const trigger = event.target.closest('[data-credit-draft-id]');
+        const creditTrigger = event.target.closest('[data-credit-draft-id]');
+        const reviewTrigger = event.target.closest('[data-review-draft-id]');
         const fileButton = event.target.closest('[data-file-url]');
         try {
-            if (trigger) {
-                trigger.disabled = true;
-                await openCreditNote(trigger.dataset.creditDraftId);
-                trigger.disabled = false;
+            if (reviewTrigger) {
+                setBusy(reviewTrigger, true, 'Abriendo…');
+                await openDraftForReview(reviewTrigger.dataset.reviewDraftId);
+                showNotice('Borrador abierto. Revisa los datos y pulsa “Emitir factura” cuando todo esté correcto.', 'success');
+                const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                draftPreview.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' });
+                setBusy(reviewTrigger, false, '');
+            } else if (creditTrigger) {
+                creditTrigger.disabled = true;
+                await openCreditNote(creditTrigger.dataset.creditDraftId);
+                creditTrigger.disabled = false;
             } else if (fileButton) {
                 fileButton.disabled = true;
                 await downloadProtectedFile(fileButton.dataset.fileUrl);
                 fileButton.disabled = false;
             }
         } catch (error) {
-            if (trigger) trigger.disabled = false;
+            if (reviewTrigger) setBusy(reviewTrigger, false, '');
+            if (creditTrigger) creditTrigger.disabled = false;
             if (fileButton) fileButton.disabled = false;
             showNotice(error.message, 'error');
         }
