@@ -449,7 +449,7 @@ if (document.body.dataset.page === 'invoice') {
 
     const sunatResultMessage = (invoice) => {
         if (String(invoice.sunat?.code) === '0111') {
-            return `${invoice.number}: SUNAT bloqueó el envío porque el usuario SOL no tiene el perfil “Envío de documentos electrónicos-Grandes emisores”. Configura un usuario SOL secundario con ese perfil y vuelve a intentarlo.`;
+            return `${invoice.number}: SUNAT rechazó las credenciales del servicio web. En el usuario SOL secundario habilita SEE - Del Contribuyente y Envío de Documentos → Servicio de Envío de Documentos Electrónicos → Servicio de Envío de Documentos Electrónicos por Servicio Web; termina con Siguiente → Grabar y vuelve a intentarlo.`;
         }
 
         return `${invoice.number}: ${invoice.sunat?.message || 'SUNAT no devolvió un mensaje.'}`;

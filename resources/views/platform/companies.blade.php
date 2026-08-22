@@ -87,7 +87,7 @@
                         <label class="field"><span>Estado</span><select name="active"><option value="1">Activa</option><option value="0">Inactiva</option></select></label>
                     </div>
                     <div id="sunat-credentials" class="sunat-credentials" hidden>
-                        <label class="field"><span>Usuario SOL secundario</span><input name="sol_user" autocomplete="off"><small>Debe tener el perfil “Envío de documentos electrónicos-Grandes emisores”.</small></label>
+                        <label class="field"><span>Usuario SOL secundario</span><input name="sol_user" autocomplete="off"><small>En SUNAT asígnale: SEE - Del Contribuyente y Envío de Documentos → Servicio de Envío de Documentos Electrónicos → Servicio de Envío de Documentos Electrónicos por Servicio Web. Finaliza con Siguiente → Grabar.</small></label>
                         <label class="field"><span>Contraseña SOL</span><input name="sol_password" type="password" autocomplete="new-password"></label>
                         <div class="certificate-box">
                             <div class="certificate-box-heading">
