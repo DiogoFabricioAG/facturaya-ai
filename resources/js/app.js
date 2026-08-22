@@ -449,7 +449,7 @@ if (document.body.dataset.page === 'invoice') {
 
     const sunatResultMessage = (invoice) => {
         if (String(invoice.sunat?.code) === '0111') {
-            return `${invoice.number}: SUNAT rechazó la autorización del usuario para el servicio web. En el usuario SOL secundario habilita SEE - Del Contribuyente y Envío de Documentos → Servicio de Envío de Documentos Electrónicos → Servicio de Envío de Documentos Electrónicos por Servicio Web; termina con Siguiente → Grabar y vuelve a intentarlo.`;
+            return `${invoice.number}: SUNAT todavía no reconoce la autorización del usuario para el servicio web. Si ya habilitaste Envío de Documentos Electrónicos por Servicio Web, terminaste con Siguiente → Grabar y puedes verlo al ingresar con el usuario secundario, no necesitas otro permiso para emitir: espera a que SUNAT propague el cambio y reintenta este mismo comprobante más tarde.`;
         }
 
         return `${invoice.number}: ${invoice.sunat?.message || 'SUNAT no devolvió un mensaje.'}`;
