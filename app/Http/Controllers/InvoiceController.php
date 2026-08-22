@@ -29,6 +29,12 @@ class InvoiceController extends Controller
         $statusCode = 201;
 
         if ($invoice) {
+            if ($invoice->sunat_environment !== $company->sunat_environment) {
+                return response()->json([
+                    'message' => 'Esta factura pertenece al entorno SUNAT '.$invoice->sunat_environment.' y no puede reenviarse desde '.$company->sunat_environment.'.',
+                ], 409);
+            }
+
             if ($invoice->status !== 'error') {
                 return (new InvoiceResource($invoice))->response();
             }
@@ -63,9 +69,10 @@ class InvoiceController extends Controller
             $series = $company->default_series;
             $invoice = Invoice::create([
                 'company_id' => $company->id,
+                'sunat_environment' => $company->sunat_environment,
                 'invoice_draft_id' => $invoiceDraft->id,
                 'series' => $series,
-                'correlative' => $sequences->next($company, $series),
+                'correlative' => $sequences->next($company, $series, $company->sunat_environment),
                 'status' => 'processing',
             ]);
         }

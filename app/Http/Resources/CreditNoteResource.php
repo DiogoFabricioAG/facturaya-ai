@@ -14,6 +14,7 @@ class CreditNoteResource extends JsonResource
             'company_id' => $this->company_id,
             'invoice_id' => $this->invoice_id,
             'number' => $this->number,
+            'environment' => $this->sunat_environment,
             'affected_document' => $this->whenLoaded('invoice', fn () => $this->invoice->number),
             'issue_date' => $this->issue_date?->format('Y-m-d'),
             'reason' => [

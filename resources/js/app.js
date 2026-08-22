@@ -586,6 +586,9 @@ if (document.body.dataset.page === 'invoice') {
             const [label, status] = statusLabel(item);
             const notes = item.invoice?.credit_notes || [];
             const invoiceFiles = item.invoice?.files || {};
+            const invoiceEnvironment = item.invoice?.environment
+                ? `<span class="document-environment environment-${escapeHtml(item.invoice.environment)}">${item.invoice.environment === 'beta' ? 'Prueba Beta' : 'SUNAT producción'}</span>`
+                : '';
             const invoiceFileList = item.invoice?.status === 'accepted'
                 ? `<div class="invoice-file-list">
                     ${invoiceFiles.pdf ? `<button class="document-file-link document-file-pdf" type="button" data-file-url="${escapeHtml(invoiceFiles.pdf)}">PDF</button>` : ''}
@@ -598,8 +601,10 @@ if (document.body.dataset.page === 'invoice') {
                     ${note.files?.cdr ? `<button class="document-file-link" type="button" data-file-url="${escapeHtml(note.files.cdr)}">CDR</button>` : ''}
                 </span>`).join('')}</div>` : '';
             let action = '<span class="action-unavailable">Sin acciones</span>';
-            if (item.invoice?.status === 'accepted') {
+            if (item.invoice?.status === 'accepted' && item.invoice.environment === company.sunat_environment) {
                 action = `<button class="credit-note-trigger" type="button" data-credit-draft-id="${item.id}">+ Nota de crédito</button>`;
+            } else if (item.invoice?.status === 'accepted') {
+                action = '<span class="action-unavailable">Solo historial</span>';
             } else if (item.invoice?.status === 'error' && item.status === 'issue_failed') {
                 action = `<button class="retry-invoice-trigger" type="button" data-retry-draft-id="${item.id}">Reintentar envío</button>`;
             } else if (item.status === 'review_required' && !item.invoice) {
@@ -608,7 +613,7 @@ if (document.body.dataset.page === 'invoice') {
             return `<tr>
                 <td><span class="mono-date">${escapeHtml(item.issue_date)}</span></td>
                 <td><strong>${escapeHtml(item.customer.name)}</strong><small>RUC ${escapeHtml(item.customer.ruc)}</small></td>
-                <td><strong>${escapeHtml(item.invoice?.number || 'Borrador')}</strong>${invoiceFileList}${noteList}</td>
+                <td><strong>${escapeHtml(item.invoice?.number || 'Borrador')}</strong>${invoiceEnvironment}${invoiceFileList}${noteList}</td>
                 <td><strong>${money(item.totals.total, item.currency)}</strong></td>
                 <td><span class="activity-status status-${escapeHtml(status)}">${escapeHtml(label)}</span></td>
                 <td>${action}</td>

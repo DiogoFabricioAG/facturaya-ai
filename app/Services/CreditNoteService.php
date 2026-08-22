@@ -32,6 +32,12 @@ final class CreditNoteService
             ]);
         }
 
+        if ($invoice->sunat_environment !== $invoice->company->sunat_environment) {
+            throw ValidationException::withMessages([
+                'invoice' => 'La factura fue emitida en SUNAT '.$invoice->sunat_environment.' y no puede modificarse desde '.$invoice->company->sunat_environment.'.',
+            ]);
+        }
+
         if ($payload['issue_date'] < $invoice->draft->issue_date->format('Y-m-d')) {
             throw ValidationException::withMessages([
                 'issue_date' => 'La nota no puede tener una fecha anterior a la factura afectada.',
@@ -118,9 +124,10 @@ final class CreditNoteService
             $series = $invoice->company->default_credit_note_series;
             $creditNote = CreditNote::create([
                 'company_id' => $invoice->company_id,
+                'sunat_environment' => $invoice->sunat_environment,
                 'invoice_id' => $invoice->id,
                 'series' => $series,
-                'correlative' => $this->sequences->next($invoice->company, $series),
+                'correlative' => $this->sequences->next($invoice->company, $series, $invoice->sunat_environment),
                 'issue_date' => $payload['issue_date'],
                 'reason_code' => $payload['reason_code'],
                 'reason_description' => trim($payload['reason_description']),

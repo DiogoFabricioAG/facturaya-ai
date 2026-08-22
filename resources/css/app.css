@@ -359,6 +359,9 @@ h2 { margin: 0; font-size: 20px; line-height: 1.25; letter-spacing: -.025em; }
 .retry-invoice-trigger { border-color: #d49831; color: #745417; background: #fff8e3; }
 .retry-invoice-trigger:hover { border-color: #b8770d; color: #674508; background: #fff1c9; }
 .action-unavailable { color: #9ca4b4; font-size: 9px; white-space: nowrap; }
+.document-environment { display: inline-flex; width: max-content; margin-top: 5px; padding: 3px 6px; font: 600 7px 'IBM Plex Mono', monospace; text-transform: uppercase; letter-spacing: .04em; }
+.environment-beta { color: #745417; background: #fff1c9; }
+.environment-production { color: #176a51; background: #dcf8ed; }
 .credit-note-list { display: grid; gap: 5px; margin-top: 7px; }
 .invoice-file-list { display: flex; align-items: center; gap: 9px; margin-top: 7px; }
 .invoice-file-list .document-file-pdf { color: #176a51; font-weight: 800; }

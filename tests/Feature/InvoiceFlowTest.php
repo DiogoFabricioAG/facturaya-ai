@@ -276,6 +276,7 @@ class InvoiceFlowTest extends TestCase
         $issued
             ->assertCreated()
             ->assertJsonPath('data.number', 'F001-00000001')
+            ->assertJsonPath('data.environment', 'beta')
             ->assertJsonPath('data.status', 'accepted')
             ->assertJsonPath('data.sunat.code', '0');
 
@@ -336,6 +337,7 @@ class InvoiceFlowTest extends TestCase
 
         $invoice = Invoice::create([
             'company_id' => $this->company->id,
+            'sunat_environment' => 'beta',
             'invoice_draft_id' => $draft->id,
             'series' => 'F001',
             'correlative' => 2,
@@ -345,6 +347,7 @@ class InvoiceFlowTest extends TestCase
         ]);
         InvoiceSequence::create([
             'company_id' => $this->company->id,
+            'sunat_environment' => 'beta',
             'series' => 'F001',
             'next_number' => 3,
         ]);
@@ -362,10 +365,45 @@ class InvoiceFlowTest extends TestCase
         $this->assertDatabaseCount('invoices', 1);
         $this->assertDatabaseHas('company_invoice_sequences', [
             'company_id' => $this->company->id,
+            'sunat_environment' => 'beta',
             'series' => 'F001',
             'next_number' => 3,
         ]);
         $this->assertSame('issued', $draft->fresh()->status);
+    }
+
+    public function test_beta_and_production_have_independent_invoice_sequences(): void
+    {
+        $betaDraft = $this->createDraftForToken($this->companyToken);
+        $betaInvoice = $this->withToken($this->companyToken)
+            ->postJson('/api/invoice-drafts/'.$betaDraft.'/issue');
+
+        $this->company->update(['sunat_environment' => 'production']);
+        $productionDraft = $this->createDraftForToken($this->companyToken);
+        $productionInvoice = $this->withToken($this->companyToken)
+            ->postJson('/api/invoice-drafts/'.$productionDraft.'/issue');
+
+        $betaInvoice
+            ->assertCreated()
+            ->assertJsonPath('data.number', 'F001-00000001')
+            ->assertJsonPath('data.environment', 'beta');
+        $productionInvoice
+            ->assertCreated()
+            ->assertJsonPath('data.number', 'F001-00000001')
+            ->assertJsonPath('data.environment', 'production');
+
+        $this->assertDatabaseHas('company_invoice_sequences', [
+            'company_id' => $this->company->id,
+            'sunat_environment' => 'beta',
+            'series' => 'F001',
+            'next_number' => 2,
+        ]);
+        $this->assertDatabaseHas('company_invoice_sequences', [
+            'company_id' => $this->company->id,
+            'sunat_environment' => 'production',
+            'series' => 'F001',
+            'next_number' => 2,
+        ]);
     }
 
     public function test_it_issues_a_full_credit_note_against_an_accepted_invoice(): void
