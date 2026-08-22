@@ -168,6 +168,7 @@ h2 { margin: 0; font-size: 20px; line-height: 1.25; letter-spacing: -.025em; }
 .saved-customer-field select:focus { border-color: var(--cobalt); box-shadow: 0 0 0 3px rgba(49,85,217,.10); }
 .saved-customer-field small { color: var(--muted); font-size: 10px; line-height: 1.45; }
 .field small { position: absolute; right: 10px; top: 41px; color: #9199aa; font-size: 10px; pointer-events: none; }
+.field .field-help { position: static; right: auto; top: auto; margin: 0; color: #687287; font-size: 9px; line-height: 1.55; pointer-events: auto; }
 .divider { height: 1px; margin: 34px 0; background: var(--line); }
 .tax-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .tax-choice { cursor: pointer; }

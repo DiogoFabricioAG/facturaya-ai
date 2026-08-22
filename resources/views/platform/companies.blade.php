@@ -87,8 +87,8 @@
                         <label class="field"><span>Estado</span><select name="active"><option value="1">Activa</option><option value="0">Inactiva</option></select></label>
                     </div>
                     <div id="sunat-credentials" class="sunat-credentials" hidden>
-                        <label class="field"><span>Usuario SOL secundario</span><input name="sol_user" autocomplete="off"><small>En SUNAT asígnale: SEE - Del Contribuyente y Envío de Documentos → Servicio de Envío de Documentos Electrónicos → Servicio de Envío de Documentos Electrónicos por Servicio Web. Finaliza con Siguiente → Grabar.</small></label>
-                        <label class="field"><span>Contraseña SOL</span><input name="sol_password" type="password" autocomplete="new-password"></label>
+                        <label class="field"><span>Usuario SOL secundario</span><input name="sol_user" autocomplete="off" aria-describedby="sol-user-help"><small id="sol-user-help" class="field-help">En SUNAT: SEE - Del Contribuyente → Servicio de Envío de Documentos Electrónicos → Envío por Servicio Web. Finaliza con Siguiente → Grabar.</small></label>
+                        <label class="field"><span>Contraseña SOL</span><input name="sol_password" type="password" autocomplete="new-password" aria-describedby="sol-password-help"><small id="sol-password-help" class="field-help">Usa la contraseña de este mismo usuario secundario, no la del usuario principal.</small></label>
                         <div class="certificate-box">
                             <div class="certificate-box-heading">
                                 <span class="certificate-lock" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M7.5 10V7.5a4.5 4.5 0 0 1 9 0V10m-10 0h11a2 2 0 0 1 2 2v7h-15v-7a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.7"/><path d="M12 14v2.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>
