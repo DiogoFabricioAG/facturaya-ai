@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Convierte texto, imágenes o PDF en una factura electrónica lista para revisar y enviar a SUNAT.">
-    <title>Emitir factura · FacturaYa AI</title>
+    <title>Emitir comprobante · FacturaYa AI</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body data-page="invoice">
@@ -39,7 +39,7 @@
         <header class="topbar">
             <a class="brand" href="/" aria-label="FacturaYa AI, inicio"><span class="brand-mark" aria-hidden="true">F</span><span>FacturaYa <em>AI</em></span></a>
             <nav class="product-nav" aria-label="Navegación principal">
-                <a class="is-active" href="/">Emitir factura</a>
+                <a class="is-active" href="/">Emitir comprobante</a>
                 <a href="/platform">Empresas</a>
             </nav>
             <button id="company-switcher" class="company-switcher" type="button" title="Cambiar de empresa">
@@ -52,11 +52,11 @@
         <main>
             <section class="intro intro-with-action" aria-labelledby="page-title">
                 <div>
-                    <p class="eyebrow">Nueva factura electrónica</p>
-                    <h1 id="page-title">De tus palabras a la factura, <span>en una sola revisión.</span></h1>
+                    <p class="eyebrow">Nuevo comprobante electrónico</p>
+                    <h1 id="page-title">De tus palabras al comprobante, <span>en una sola revisión.</span></h1>
                 <p class="intro-copy">Escribe los productos como los dirías normalmente, adjunta una cotización o combina ambos. Nosotros los ordenamos; tú conservas la decisión final.</p>
                 </div>
-                <button id="new-invoice-button" class="outline-action" type="button">+ Nueva factura</button>
+                <button id="new-invoice-button" class="outline-action" type="button">+ Nuevo comprobante</button>
             </section>
 
             <ol class="conveyor" aria-label="Proceso de facturación">
@@ -67,7 +67,7 @@
 
             <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
 
-            <section class="workspace" aria-label="Nueva factura">
+            <section class="workspace" aria-label="Nuevo comprobante">
                 <form id="import-form" class="capture-panel">
                     <div class="section-heading">
                         <span class="section-number">1</span>
@@ -82,12 +82,27 @@
                     </label>
                     <div class="form-grid">
                         <label class="field">
-                            <span>RUC del cliente</span>
+                            <span>Tipo de comprobante</span>
+                            <select id="document-type" name="document_type" required>
+                                <option value="01">Factura electrónica</option>
+                                <option value="03">Boleta electrónica</option>
+                            </select>
+                            <small>Define la serie y el XML que enviaremos.</small>
+                        </label>
+                        <label class="field">
+                            <span>Documento del cliente</span>
+                            <select id="customer-document-type" name="customer_document_type" required>
+                                <option value="6">RUC</option>
+                                <option value="1">DNI</option>
+                            </select>
+                        </label>
+                        <label class="field">
+                            <span id="customer-document-label">Número de RUC</span>
                             <input name="customer_ruc" inputmode="numeric" pattern="[0-9]{11}" maxlength="11" placeholder="20123456789" autocomplete="off" required>
-                            <small>11 dígitos</small>
+                            <small id="customer-document-help">11 dígitos</small>
                         </label>
                         <label class="field field-wide">
-                            <span>Razón social</span>
+                            <span>Nombre o razón social</span>
                             <input name="customer_name" maxlength="255" placeholder="Ej. Comercial Andina S.A.C." autocomplete="organization" required>
                         </label>
                         <label class="field">
@@ -180,7 +195,7 @@
                         </div>
                         <div class="review-actions">
                             <p id="autosave-status" class="autosave-status" aria-live="polite"><span aria-hidden="true">✓</span> Los cambios se guardan automáticamente</p>
-                            <button id="issue-button" class="primary-button" type="button"><span>Emitir factura</span><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10h12m-4-4 4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                            <button id="issue-button" class="primary-button" type="button"><span>Emitir comprobante</span><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10h12m-4-4 4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
                         </div>
                     </div>
                 </aside>

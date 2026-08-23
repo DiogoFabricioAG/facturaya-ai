@@ -6,6 +6,18 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateInvoiceDraftRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $documentType = (string) $this->input('document_type', '01');
+        $this->merge([
+            'document_type' => $documentType,
+            'customer_document_type' => (string) $this->input(
+                'customer_document_type',
+                $documentType === '03' ? '1' : '6',
+            ),
+        ]);
+    }
+
     public function authorize(): bool
     {
         return true;
@@ -13,8 +25,15 @@ class UpdateInvoiceDraftRequest extends FormRequest
 
     public function rules(): array
     {
+        $customerDocumentType = (string) $this->input('customer_document_type', '6');
+
         return [
-            'customer_ruc' => ['required', 'regex:/^\d{11}$/'],
+            'document_type' => ['required', 'in:01,03'],
+            'customer_document_type' => ['required', 'in:1,6'],
+            'customer_ruc' => [
+                'required',
+                $customerDocumentType === '6' ? 'regex:/^\d{11}$/' : 'regex:/^\d{8}$/',
+            ],
             'customer_name' => ['required', 'string', 'max:255'],
             'issue_date' => ['required', 'date_format:Y-m-d'],
             'tax_mode' => ['required', 'in:included,excluded'],

@@ -66,10 +66,14 @@ class InvoiceController extends Controller
                 return response()->json(['message' => 'El borrador aún no está listo para emitir.'], 409);
             }
 
-            $series = $company->default_series;
+            $documentType = (string) ($invoiceDraft->document_type ?: '01');
+            $series = $documentType === '03'
+                ? ($company->default_boleta_series ?: 'B001')
+                : $company->default_series;
             $invoice = Invoice::create([
                 'company_id' => $company->id,
                 'sunat_environment' => $company->sunat_environment,
+                'document_type' => $documentType,
                 'invoice_draft_id' => $invoiceDraft->id,
                 'series' => $series,
                 'correlative' => $sequences->next($company, $series, $company->sunat_environment),

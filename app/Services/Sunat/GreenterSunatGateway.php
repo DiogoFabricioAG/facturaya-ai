@@ -183,8 +183,9 @@ final class GreenterSunatGateway implements SunatGateway
             ->setNombreComercial($storedCompany->trade_name ?: $storedCompany->legal_name)
             ->setAddress($address);
 
+        $documentType = (string) ($storedInvoice->document_type ?: $draft->document_type ?: '01');
         $client = (new Client)
-            ->setTipoDoc('6')
+            ->setTipoDoc((string) ($draft->customer_document_type ?: ($documentType === '03' ? '1' : '6')))
             ->setNumDoc($draft->customer_ruc)
             ->setRznSocial($draft->customer_name);
 
@@ -206,7 +207,7 @@ final class GreenterSunatGateway implements SunatGateway
         return (new Invoice)
             ->setUblVersion('2.1')
             ->setTipoOperacion('0101')
-            ->setTipoDoc('01')
+            ->setTipoDoc($documentType)
             ->setSerie($storedInvoice->series)
             ->setCorrelativo((string) $storedInvoice->correlative)
             ->setFechaEmision(new DateTime($draft->issue_date->format('Y-m-d').' 12:00:00', new DateTimeZone('America/Lima')))
@@ -247,7 +248,7 @@ final class GreenterSunatGateway implements SunatGateway
             ->setAddress($address);
 
         $client = (new Client)
-            ->setTipoDoc('6')
+            ->setTipoDoc((string) ($draft->customer_document_type ?: ($storedNote->invoice->document_type === '03' ? '1' : '6')))
             ->setNumDoc($draft->customer_ruc)
             ->setRznSocial($draft->customer_name);
 
@@ -272,7 +273,7 @@ final class GreenterSunatGateway implements SunatGateway
             ->setSerie($storedNote->series)
             ->setCorrelativo((string) $storedNote->correlative)
             ->setFechaEmision(new DateTime($storedNote->issue_date->format('Y-m-d').' 12:00:00', new DateTimeZone('America/Lima')))
-            ->setTipDocAfectado('01')
+            ->setTipDocAfectado((string) ($storedNote->invoice->document_type ?: '01'))
             ->setNumDocfectado($storedNote->invoice->number)
             ->setCodMotivo($storedNote->reason_code)
             ->setDesMotivo($storedNote->reason_description)

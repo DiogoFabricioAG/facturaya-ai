@@ -11,6 +11,7 @@ class CustomerResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'document_type' => $this->document_type ?: '6',
             'ruc' => $this->ruc,
             'name' => $this->name,
             'created_at' => $this->created_at?->toIso8601String(),

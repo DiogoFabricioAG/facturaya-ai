@@ -13,6 +13,8 @@ class InvoiceResource extends JsonResource
             'id' => $this->id,
             'company_id' => $this->company_id,
             'number' => $this->number,
+            'document_type' => $this->document_type ?: '01',
+            'document_name' => ($this->document_type ?: '01') === '03' ? 'Boleta electrónica' : 'Factura electrónica',
             'environment' => $this->sunat_environment,
             'status' => $this->status,
             'sunat' => [

@@ -121,7 +121,9 @@ final class CreditNoteService
                 ]);
             }
 
-            $series = $invoice->company->default_credit_note_series;
+            $series = $invoice->document_type === '03'
+                ? ($invoice->company->default_boleta_credit_note_series ?: 'BC01')
+                : $invoice->company->default_credit_note_series;
             $creditNote = CreditNote::create([
                 'company_id' => $invoice->company_id,
                 'sunat_environment' => $invoice->sunat_environment,

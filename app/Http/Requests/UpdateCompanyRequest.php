@@ -32,6 +32,8 @@ class UpdateCompanyRequest extends FormRequest
             'certificate_password' => ['sometimes', 'nullable', 'required_with:certificate', 'string', 'max:1024'],
             'default_series' => ['sometimes', 'required', 'regex:/^F[A-Z0-9]{3}$/'],
             'default_credit_note_series' => ['sometimes', 'required', 'regex:/^F[A-Z0-9]{3}$/'],
+            'default_boleta_series' => ['sometimes', 'required', 'regex:/^B[A-Z0-9]{3}$/'],
+            'default_boleta_credit_note_series' => ['sometimes', 'required', 'regex:/^B[A-Z0-9]{3}$/'],
             'active' => ['sometimes', 'boolean'],
         ];
     }

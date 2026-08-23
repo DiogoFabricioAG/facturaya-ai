@@ -70,7 +70,7 @@ if (document.body.dataset.page === 'platform') {
                 <span class="file-index">${String(index + 1).padStart(2, '0')}</span>
                 <div class="file-identity"><span class="file-ruc">RUC ${escapeHtml(item.ruc)}</span><h3>${escapeHtml(item.trade_name || item.legal_name)}</h3><p>${escapeHtml(item.legal_name)}</p></div>
                 <div class="file-location"><span>Domicilio fiscal</span><strong>${escapeHtml(item.fiscal_address.district)}, ${escapeHtml(item.fiscal_address.department)}</strong><small>${escapeHtml(item.fiscal_address.address)}</small></div>
-                <div class="file-sunat"><span class="mode-chip mode-${escapeHtml(item.sunat_driver)}">${item.sunat_driver === 'greenter' ? 'Greenter' : 'Simulación'}</span><small>${escapeHtml(item.sunat_environment)} · Fact. ${escapeHtml(item.default_series)} · NC ${escapeHtml(item.default_credit_note_series)}</small></div>
+                <div class="file-sunat"><span class="mode-chip mode-${escapeHtml(item.sunat_driver)}">${item.sunat_driver === 'greenter' ? 'Greenter' : 'Simulación'}</span><small>${escapeHtml(item.sunat_environment)} · Fact. ${escapeHtml(item.default_series)} · Bol. ${escapeHtml(item.default_boleta_series || 'B001')}</small></div>
                 <span class="file-status ${item.active ? 'is-active' : ''}">${item.active ? 'Activa' : 'Inactiva'}</span>
                 <div class="file-actions"><button class="edit-company-button" type="button" data-edit-company-id="${escapeHtml(item.id)}">Editar</button></div>
             </article>
@@ -157,6 +157,8 @@ if (document.body.dataset.page === 'platform') {
                 sunat_environment: company.sunat_environment,
                 default_series: company.default_series,
                 default_credit_note_series: company.default_credit_note_series,
+                default_boleta_series: company.default_boleta_series || 'B001',
+                default_boleta_credit_note_series: company.default_boleta_credit_note_series || 'BC01',
                 active: company.active ? '1' : '0',
             }).forEach(([name, value]) => {
                 const field = companyForm.elements.namedItem(name);

@@ -26,6 +26,8 @@ class CompanyResource extends JsonResource
             'sunat_credentials_configured' => $this->hasSunatCredentials(),
             'default_series' => $this->default_series,
             'default_credit_note_series' => $this->default_credit_note_series,
+            'default_boleta_series' => $this->default_boleta_series ?: 'B001',
+            'default_boleta_credit_note_series' => $this->default_boleta_credit_note_series ?: 'BC01',
             'active' => $this->active,
             'created_at' => $this->created_at?->toIso8601String(),
         ];

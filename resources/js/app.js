@@ -17,6 +17,10 @@ if (document.body.dataset.page === 'invoice') {
     const itemsBody = document.querySelector('#items-body');
     const notice = document.querySelector('#notice');
     const issueButton = document.querySelector('#issue-button');
+    const documentType = document.querySelector('#document-type');
+    const customerDocumentType = document.querySelector('#customer-document-type');
+    const customerDocumentLabel = document.querySelector('#customer-document-label');
+    const customerDocumentHelp = document.querySelector('#customer-document-help');
     const autosaveStatus = document.querySelector('#autosave-status');
     const accessGate = document.querySelector('#access-gate');
     const accessForm = document.querySelector('#company-access-form');
@@ -142,17 +146,38 @@ if (document.body.dataset.page === 'invoice') {
         customers.forEach((customer) => {
             const option = document.createElement('option');
             option.value = customer.id;
-            option.textContent = `${customer.name} · RUC ${customer.ruc}`;
+            option.textContent = `${customer.name} · ${customer.document_type === '1' ? 'DNI' : 'RUC'} ${customer.ruc}`;
             savedCustomer.appendChild(option);
         });
         savedCustomer.value = customers.some((customer) => customer.id === selected) ? selected : '';
     };
 
-    const findCustomerByRuc = (ruc) => customers.find((customer) => customer.ruc === String(ruc || '').trim());
+    const findCustomer = (number, type) => customers.find((customer) => customer.ruc === String(number || '').trim()
+        && String(customer.document_type || '6') === String(type || '6'));
+
+    const updateDocumentUi = (resetCustomerType = false) => {
+        const isBoleta = documentType.value === '03';
+        if (resetCustomerType) customerDocumentType.value = isBoleta ? '1' : '6';
+
+        const isDni = customerDocumentType.value === '1';
+        form.elements.customer_ruc.maxLength = isDni ? 8 : 11;
+        form.elements.customer_ruc.pattern = isDni ? '[0-9]{8}' : '[0-9]{11}';
+        form.elements.customer_ruc.placeholder = isDni ? '12345678' : '20123456789';
+        customerDocumentLabel.textContent = isDni ? 'Número de DNI' : 'Número de RUC';
+        customerDocumentHelp.textContent = isDni ? '8 dígitos' : '11 dígitos';
+        document.querySelector('#page-title').innerHTML = isBoleta
+            ? 'De tus palabras a la boleta, <span>en una sola revisión.</span>'
+            : 'De tus palabras a la factura, <span>en una sola revisión.</span>';
+        const issueLabel = isBoleta ? 'Emitir boleta' : 'Emitir factura';
+        issueButton.dataset.originalLabel = issueLabel;
+        issueButton.querySelector('span').textContent = issueLabel;
+        document.querySelector('#preview-title').textContent = draft ? 'Revisa los datos extraídos' : `Tu ${isBoleta ? 'boleta' : 'factura'} aparecerá aquí`;
+    };
 
     const syncCustomerPrompt = () => {
         const ruc = form.elements.customer_ruc.value.trim();
-        const existing = findCustomerByRuc(ruc);
+        const documentTypeValue = customerDocumentType.value;
+        const existing = findCustomer(ruc, documentTypeValue);
         if (existing) {
             saveCustomerChoice.hidden = true;
             customerSaveStatus.textContent = 'Este cliente ya está guardado para esta empresa.';
@@ -162,7 +187,8 @@ if (document.body.dataset.page === 'invoice') {
         }
 
         customerSaveStatus.hidden = true;
-        saveCustomerChoice.hidden = !/^\d{11}$/.test(ruc) || form.elements.customer_name.value.trim() === '';
+        const validDocument = documentTypeValue === '1' ? /^\d{8}$/.test(ruc) : /^\d{11}$/.test(ruc);
+        saveCustomerChoice.hidden = !validDocument || form.elements.customer_name.value.trim() === '';
     };
 
     const saveCustomerIfRequested = async () => {
@@ -172,6 +198,7 @@ if (document.body.dataset.page === 'invoice') {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+                document_type: customerDocumentType.value,
                 ruc: form.elements.customer_ruc.value.trim(),
                 name: form.elements.customer_name.value.trim(),
             }),
@@ -222,20 +249,23 @@ if (document.body.dataset.page === 'invoice') {
 
     const renderDraft = (value) => {
         draft = value;
+        documentType.value = draft.document_type || '01';
+        customerDocumentType.value = draft.customer.document_type || (documentType.value === '03' ? '1' : '6');
+        updateDocumentUi();
         form.elements.customer_ruc.value = draft.customer.ruc || '';
         form.elements.customer_name.value = draft.customer.name || '';
         form.elements.issue_date.value = draft.issue_date || '';
         form.querySelectorAll('input[name="tax_mode"]').forEach((input) => {
             input.checked = input.value === draft.tax_mode;
         });
-        const savedDraftCustomer = customers.find((customer) => customer.ruc === draft.customer.ruc);
+        const savedDraftCustomer = findCustomer(draft.customer.ruc, draft.customer.document_type);
         savedCustomer.value = savedDraftCustomer?.id || '';
         emptyPreview.hidden = true;
         loadingPreview.hidden = true;
         draftPreview.hidden = false;
         document.querySelector('#preview-title').textContent = 'Revisa los datos extraídos';
         document.querySelector('#summary-client').textContent = draft.customer.name;
-        document.querySelector('#summary-ruc').textContent = `RUC ${draft.customer.ruc} · ${draft.issue_date}`;
+        document.querySelector('#summary-ruc').textContent = `${draft.customer.document_type === '1' ? 'DNI' : 'RUC'} ${draft.customer.ruc} · ${draft.issue_date}`;
         document.querySelector('#summary-company').textContent = `Emisor: ${draft.company.legal_name} · RUC ${draft.company.ruc}`;
         syncCustomerPrompt();
         draftStatus.textContent = draft.status === 'issued' ? 'Emitida' : 'Lista para revisar';
@@ -259,6 +289,7 @@ if (document.body.dataset.page === 'invoice') {
         draft = null;
         clearTimeout(autoSaveTimer);
         form.reset();
+        updateDocumentUi();
         fileName.textContent = 'Opcional si escribes los productos · PDF, JPG, PNG o WEBP · máximo 12 MB';
         updateTextCount();
         itemsBody.innerHTML = '';
@@ -281,6 +312,8 @@ if (document.body.dataset.page === 'invoice') {
     };
 
     const collectDraft = () => ({
+        document_type: documentType.value,
+        customer_document_type: customerDocumentType.value,
         customer_ruc: form.elements.customer_ruc.value,
         customer_name: form.elements.customer_name.value,
         issue_date: form.elements.issue_date.value,
@@ -355,7 +388,9 @@ if (document.body.dataset.page === 'invoice') {
     };
 
     const reviewFieldsAreValid = () => {
-        const customerIsValid = /^\d{11}$/.test(form.elements.customer_ruc.value)
+        const customerIsValid = (customerDocumentType.value === '1'
+            ? /^\d{8}$/.test(form.elements.customer_ruc.value)
+            : /^\d{11}$/.test(form.elements.customer_ruc.value))
             && form.elements.customer_name.value.trim() !== ''
             && form.elements.issue_date.value !== '';
         const itemsAreValid = [...itemsBody.querySelectorAll('tr')].every((row) => {
@@ -539,8 +574,11 @@ if (document.body.dataset.page === 'invoice') {
         creditReasonCode.value = '01';
         creditReasonDescription.value = creditReasonDefaults['01'];
         document.querySelector('#credit-invoice-number').textContent = source.invoice.number;
-        document.querySelector('#credit-customer').textContent = `${source.customer.name} · RUC ${source.customer.ruc}`;
-        document.querySelector('#credit-note-series').textContent = `${company.default_credit_note_series || 'FC01'} · siguiente número`;
+        document.querySelector('#credit-customer').textContent = `${source.customer.name} · ${source.customer.document_type === '1' ? 'DNI' : 'RUC'} ${source.customer.ruc}`;
+        const creditSeries = source.document_type === '03'
+            ? (company.default_boleta_credit_note_series || 'BC01')
+            : (company.default_credit_note_series || 'FC01');
+        document.querySelector('#credit-note-series').textContent = `${creditSeries} · siguiente número`;
         const issueDate = document.querySelector('#credit-issue-date');
         issueDate.min = source.issue_date;
         creditError.hidden = true;
@@ -616,8 +654,8 @@ if (document.body.dataset.page === 'invoice') {
             }
             return `<tr>
                 <td><span class="mono-date">${escapeHtml(item.issue_date)}</span></td>
-                <td><strong>${escapeHtml(item.customer.name)}</strong><small>RUC ${escapeHtml(item.customer.ruc)}</small></td>
-                <td><strong>${escapeHtml(item.invoice?.number || 'Borrador')}</strong>${invoiceEnvironment}${invoiceFileList}${noteList}</td>
+                <td><strong>${escapeHtml(item.customer.name)}</strong><small>${item.customer.document_type === '1' ? 'DNI' : 'RUC'} ${escapeHtml(item.customer.ruc)}</small></td>
+                <td><strong>${escapeHtml(item.invoice?.number || 'Borrador')}</strong><small>${item.invoice?.document_type === '03' ? 'Boleta' : 'Factura'}</small>${invoiceEnvironment}${invoiceFileList}${noteList}</td>
                 <td><strong>${money(item.totals.total, item.currency)}</strong></td>
                 <td><span class="activity-status status-${escapeHtml(status)}">${escapeHtml(label)}</span></td>
                 <td>${action}</td>
@@ -639,7 +677,7 @@ if (document.body.dataset.page === 'invoice') {
             } else if (reviewTrigger) {
                 setBusy(reviewTrigger, true, 'Abriendo…');
                 await openDraftForReview(reviewTrigger.dataset.reviewDraftId);
-                showNotice('Borrador abierto. Revisa los datos y pulsa “Emitir factura” cuando todo esté correcto.', 'success');
+                showNotice('Borrador abierto. Revisa los datos y pulsa “Emitir” cuando todo esté correcto.', 'success');
                 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
                 draftPreview.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' });
                 setBusy(reviewTrigger, false, '');
@@ -816,11 +854,23 @@ if (document.body.dataset.page === 'invoice') {
             scheduleAutoSave();
         });
     });
+    documentType.addEventListener('change', () => {
+        updateDocumentUi(true);
+        syncCustomerPrompt();
+        scheduleAutoSave();
+    });
+    customerDocumentType.addEventListener('change', () => {
+        updateDocumentUi();
+        syncCustomerPrompt();
+        scheduleAutoSave();
+    });
     savedCustomer.addEventListener('change', () => {
         const selected = customers.find((customer) => customer.id === savedCustomer.value);
         if (!selected) return;
         form.elements.customer_ruc.value = selected.ruc;
         form.elements.customer_name.value = selected.name;
+        customerDocumentType.value = selected.document_type || '6';
+        updateDocumentUi();
         syncCustomerPrompt();
         if (draft) scheduleAutoSave();
     });
@@ -849,6 +899,7 @@ if (document.body.dataset.page === 'invoice') {
     });
 
     updateTextCount();
+    updateDocumentUi();
 
     const savedCompanyToken = sessionStorage.getItem('facturaya_company_token');
     if (savedCompanyToken) {

@@ -12,12 +12,14 @@ class InvoiceDraftResource extends JsonResource
         return [
             'id' => $this->id,
             'status' => $this->status,
+            'document_type' => $this->document_type ?: '01',
             'company' => $this->whenLoaded('company', fn () => [
                 'id' => $this->company->id,
                 'ruc' => $this->company->ruc,
                 'legal_name' => $this->company->legal_name,
             ]),
             'customer' => [
+                'document_type' => $this->customer_document_type ?: '6',
                 'ruc' => $this->customer_ruc,
                 'name' => $this->customer_name,
             ],

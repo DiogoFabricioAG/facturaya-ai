@@ -15,6 +15,8 @@ class StoreCompanyRequest extends FormRequest
             'sunat_environment' => $this->input('sunat_environment', config('facturaya.sunat.default_environment')),
             'default_series' => $this->input('default_series', 'F001'),
             'default_credit_note_series' => $this->input('default_credit_note_series', 'FC01'),
+            'default_boleta_series' => $this->input('default_boleta_series', 'B001'),
+            'default_boleta_credit_note_series' => $this->input('default_boleta_credit_note_series', 'BC01'),
         ]);
     }
 
@@ -42,6 +44,8 @@ class StoreCompanyRequest extends FormRequest
             'certificate_password' => ['nullable', 'required_with:certificate', 'string', 'max:1024'],
             'default_series' => ['required', 'regex:/^F[A-Z0-9]{3}$/'],
             'default_credit_note_series' => ['required', 'regex:/^F[A-Z0-9]{3}$/'],
+            'default_boleta_series' => ['required', 'regex:/^B[A-Z0-9]{3}$/'],
+            'default_boleta_credit_note_series' => ['required', 'regex:/^B[A-Z0-9]{3}$/'],
             'token_name' => ['nullable', 'string', 'max:100'],
         ];
     }

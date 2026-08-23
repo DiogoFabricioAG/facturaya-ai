@@ -45,7 +45,14 @@ class InvoiceDraftController extends Controller
 
         $draft = InvoiceDraft::create([
             'company_id' => $company->id,
-            ...$request->safe()->only(['customer_ruc', 'customer_name', 'issue_date', 'tax_mode']),
+            ...$request->safe()->only([
+                'document_type',
+                'customer_document_type',
+                'customer_ruc',
+                'customer_name',
+                'issue_date',
+                'tax_mode',
+            ]),
             'currency' => 'PEN',
             'status' => 'analyzing',
             'source_path' => $source['path'],
@@ -164,6 +171,8 @@ class InvoiceDraftController extends Controller
         }
 
         $invoiceDraft->update($request->safe()->only([
+            'document_type',
+            'customer_document_type',
             'customer_ruc',
             'customer_name',
             'issue_date',

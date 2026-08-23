@@ -71,6 +71,7 @@ class CustomerController extends Controller
         $customer = Customer::query()->updateOrCreate(
             [
                 'company_id' => $context->company()->id,
+                'document_type' => $request->string('document_type')->value(),
                 'ruc' => $request->string('ruc')->value(),
             ],
             ['name' => trim($request->string('name')->value())],

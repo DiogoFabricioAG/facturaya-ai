@@ -30,7 +30,7 @@
     <div id="platform-content" class="page-shell app-content platform-content">
         <header class="topbar">
             <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">F</span><span>FacturaYa <em>AI</em></span></a>
-            <nav class="product-nav" aria-label="Navegación principal"><a href="/">Emitir factura</a><a class="is-active" href="/platform">Empresas</a></nav>
+            <nav class="product-nav" aria-label="Navegación principal"><a href="/">Emitir comprobante</a><a class="is-active" href="/platform">Empresas</a></nav>
             <button id="close-platform" class="outline-action compact-action" type="button">Cerrar administración</button>
         </header>
 
@@ -83,6 +83,8 @@
                         <label class="field"><span>Entorno SUNAT</span><select name="sunat_environment"><option value="beta">Beta / pruebas</option><option value="production">Producción</option></select></label>
                         <label class="field"><span>Serie de facturas</span><input name="default_series" value="F001" maxlength="4" required></label>
                         <label class="field"><span>Serie de notas de crédito</span><input name="default_credit_note_series" value="FC01" maxlength="4" required></label>
+                        <label class="field"><span>Serie de boletas</span><input name="default_boleta_series" value="B001" maxlength="4" required></label>
+                        <label class="field"><span>Serie de NC de boletas</span><input name="default_boleta_credit_note_series" value="BC01" maxlength="4" required></label>
                         <label id="token-name-field" class="field"><span>Nombre del token</span><input name="token_name" value="Sistema principal" required></label>
                         <label class="field"><span>Estado</span><select name="active"><option value="1">Activa</option><option value="0">Inactiva</option></select></label>
                     </div>

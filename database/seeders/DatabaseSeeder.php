@@ -30,6 +30,8 @@ class DatabaseSeeder extends Seeder
             'sunat_driver' => 'fake',
             'sunat_environment' => 'beta',
             'default_series' => 'F001',
+            'default_boleta_series' => 'B001',
+            'default_boleta_credit_note_series' => 'BC01',
             'active' => true,
         ]);
 

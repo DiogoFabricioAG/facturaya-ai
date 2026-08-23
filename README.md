@@ -17,7 +17,7 @@ El RUC del cliente, fecha y productos se reciben en cada factura; no son variabl
 
 1. El administrador registra una empresa y recibe un token una sola vez.
 2. La empresa usa ese token como `Authorization: Bearer ...`.
-3. Escribe los productos en lenguaje natural o sube una cotización, lista o documento en PDF/imagen.
+3. Elige factura o boleta, escribe los productos en lenguaje natural o sube una cotización, lista o documento en PDF/imagen.
 4. La capa de extracción produce el mismo JSON estructurado para cualquiera de las dos entradas.
 5. Laravel recalcula importes e IGV sin delegar aritmética a la IA.
 6. El usuario revisa y corrige cada línea.
@@ -49,7 +49,7 @@ Abre `http://127.0.0.1:8000`, introduce ese token en “Espacio de empresa” y 
 
 ## Interfaz visual
 
-- `/`: acceso por clave de empresa, creación de factura, carga del documento, selección de IGV, revisión editable, emisión y actividad reciente.
+- `/`: acceso por clave de empresa, creación de facturas o boletas, carga del documento, selección de IGV, revisión editable, emisión y actividad reciente.
 - `/platform`: administración visual de emisores. Usa `PLATFORM_ADMIN_TOKEN` para listar empresas y registrar una nueva en modo simulación o Greenter.
 
 El panel de plataforma muestra el token inicial una sola vez después de registrar la empresa. Las claves de empresa y administración se conservan en `sessionStorage`, por lo que desaparecen al cerrar la sesión del navegador y no se insertan en el HTML generado por Laravel.
@@ -102,6 +102,8 @@ curl -X POST http://localhost:8000/api/admin/companies \
     "sunat_environment": "beta",
     "default_series": "F001",
     "default_credit_note_series": "FC01",
+    "default_boleta_series": "B001",
+    "default_boleta_credit_note_series": "BC01",
     "token_name": "Sistema principal"
   }'
 ```
@@ -128,7 +130,9 @@ curl -X POST http://localhost:8000/api/admin/companies \
   -F "certificate=@certificado.p12" \
   -F "certificate_password=CONTRASENA_DEL_CERTIFICADO" \
   -F "default_series=F001" \
-  -F "default_credit_note_series=FC01"
+  -F "default_credit_note_series=FC01" \
+  -F "default_boleta_series=B001" \
+  -F "default_boleta_credit_note_series=BC01"
 ```
 
 Acepta el archivo original `.p12` o `.pfx` descargado de SUNAT o entregado por el proveedor del certificado. La aplicación lo abre en memoria, valida que incluya una clave privada correspondiente y que esté vigente, lo convierte internamente al PEM requerido por Greenter y cifra el resultado antes de guardarlo. `certificate_password` solo se utiliza durante esa conversión y no se almacena. Primero valida contra `beta`; cambia una empresa a `production` únicamente después de comprobar firma, credenciales, serie y respuestas CDR.
@@ -143,6 +147,8 @@ Con productos escritos por una persona:
 curl -X POST http://localhost:8000/api/invoice-drafts/import \
   -H "Accept: application/json" \
   -H "Authorization: Bearer fya_TOKEN_DE_LA_EMPRESA" \
+  -F "document_type=01" \
+  -F "customer_document_type=6" \
   -F "customer_ruc=20123456789" \
   -F "customer_name=COMERCIAL ANDINA S.A.C." \
   -F "issue_date=2026-08-15" \
@@ -156,7 +162,9 @@ Con una imagen o PDF:
 curl -X POST http://localhost:8000/api/invoice-drafts/import \
   -H "Accept: application/json" \
   -H "Authorization: Bearer fya_TOKEN_DE_LA_EMPRESA" \
-  -F "customer_ruc=20123456789" \
+  -F "document_type=03" \
+  -F "customer_document_type=1" \
+  -F "customer_ruc=12345678" \
   -F "customer_name=COMERCIAL ANDINA S.A.C." \
   -F "issue_date=2026-08-15" \
   -F "tax_mode=included" \
@@ -176,6 +184,8 @@ curl -X POST http://localhost:8000/api/invoice-drafts/import \
   -F "products_text=Agrega 3 meses de soporte a S/ 250 y no dupliques los productos del archivo" \
   -F "file=@cotizacion.pdf"
 ```
+
+Para una boleta usa `document_type=03`. El cliente puede identificarse con `customer_document_type=1` y un DNI de 8 dígitos, o con `customer_document_type=6` y un RUC de 11 dígitos. La serie de boleta se toma de `default_boleta_series` (por defecto `B001`). Las facturas usan `01` y las series `F` configuradas.
 
 Modalidades tributarias:
 

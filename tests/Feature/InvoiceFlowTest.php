@@ -299,6 +299,33 @@ class InvoiceFlowTest extends TestCase
             ->assertJsonPath('data.number', 'F001-00000001');
     }
 
+    public function test_it_issues_a_boleta_with_a_dni_and_boleta_series(): void
+    {
+        $created = $this->post('/api/invoice-drafts/import', [
+            ...$this->customerData(),
+            'document_type' => '03',
+            'customer_document_type' => '1',
+            'customer_ruc' => '12345678',
+            'customer_name' => 'Ana Pérez',
+            'tax_mode' => 'included',
+            'products_text' => '1 servicio de instalación a S/ 118.',
+        ], $this->companyHeaders())->assertCreated()->json('data');
+
+        $issued = $this->withToken($this->companyToken)
+            ->postJson('/api/invoice-drafts/'.$created['id'].'/issue');
+
+        $issued
+            ->assertCreated()
+            ->assertJsonPath('data.number', 'B001-00000001')
+            ->assertJsonPath('data.document_type', '03')
+            ->assertJsonPath('data.document_name', 'Boleta electrónica')
+            ->assertJsonPath('data.status', 'accepted');
+
+        $invoice = InvoiceDraft::findOrFail($created['id'])->invoice;
+        $this->assertSame('03', $invoice->document_type);
+        $this->assertStringContainsString('documentType="03"', Storage::disk('local')->get($invoice->xml_path));
+    }
+
     public function test_companies_are_isolated_and_have_independent_correlatives(): void
     {
         [$secondCompany, $secondToken] = $this->createCompany('20222222222', 'Empresa Dos S.A.C.');
@@ -542,6 +569,8 @@ class InvoiceFlowTest extends TestCase
             'sunat_driver' => 'fake',
             'sunat_environment' => 'beta',
             'default_series' => 'F001',
+            'default_boleta_series' => 'B001',
+            'default_boleta_credit_note_series' => 'BC01',
             'active' => true,
         ]);
         $issued = app(CompanyApiTokenService::class)->create($company, 'Pruebas');

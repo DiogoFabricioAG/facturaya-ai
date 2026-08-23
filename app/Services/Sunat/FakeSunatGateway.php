@@ -13,7 +13,8 @@ final class FakeSunatGateway implements SunatGateway
     public function issue(InvoiceDraft $draft, Invoice $invoice): array
     {
         $draft->loadMissing('company');
-        $name = $draft->company->ruc.'-01-'.$invoice->series.'-'.$invoice->correlative;
+        $documentType = (string) ($invoice->document_type ?: $draft->document_type ?: '01');
+        $name = $draft->company->ruc.'-'.$documentType.'-'.$invoice->series.'-'.$invoice->correlative;
         $directory = 'companies/'.$draft->company_id.'/invoices/'.$invoice->id;
         $xmlPath = $directory.'/'.$name.'.xml';
         $cdrPath = $directory.'/R-'.$name.'.json';
@@ -21,14 +22,14 @@ final class FakeSunatGateway implements SunatGateway
         Storage::disk('local')->put($xmlPath, $this->fakeXml($draft, $invoice));
         Storage::disk('local')->put($cdrPath, json_encode([
             'code' => '0',
-            'description' => 'MODO DEMOSTRACIÓN: factura aceptada localmente.',
+            'description' => 'MODO DEMOSTRACIÓN: comprobante aceptado localmente.',
             'notes' => [],
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 
         return [
             'status' => 'accepted',
             'code' => '0',
-            'message' => 'Modo demostración: factura aceptada localmente.',
+            'message' => 'Modo demostración: comprobante aceptado localmente.',
             'notes' => ['No fue enviada a SUNAT porque esta empresa usa el modo fake.'],
             'xml_path' => $xmlPath,
             'cdr_path' => $cdrPath,
@@ -63,12 +64,13 @@ final class FakeSunatGateway implements SunatGateway
     private function fakeXml(InvoiceDraft $draft, Invoice $invoice): string
     {
         $customer = htmlspecialchars($draft->customer_name, ENT_XML1);
+        $documentType = (string) ($invoice->document_type ?: $draft->document_type ?: '01');
 
         return <<<XML
 <?xml version="1.0" encoding="UTF-8"?>
-<Invoice demo="true">
+<Invoice demo="true" documentType="{$documentType}">
   <ID>{$invoice->series}-{$invoice->correlative}</ID>
-  <CustomerRuc>{$draft->customer_ruc}</CustomerRuc>
+  <CustomerDocument type="{$draft->customer_document_type}">{$draft->customer_ruc}</CustomerDocument>
   <CustomerName>{$customer}</CustomerName>
   <TaxableAmount>{$draft->subtotal}</TaxableAmount>
   <TaxAmount>{$draft->igv}</TaxAmount>
