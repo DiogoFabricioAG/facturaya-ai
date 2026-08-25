@@ -104,6 +104,7 @@
                         <label class="field field-wide">
                             <span>Nombre o razón social</span>
                             <input name="customer_name" maxlength="255" placeholder="Ej. Comercial Andina S.A.C." autocomplete="organization" required>
+                            <small id="customer-lookup-status" class="field-help customer-lookup-status" aria-live="polite" hidden></small>
                         </label>
                         <label class="field">
                             <span>Fecha de emisión</span>

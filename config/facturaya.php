@@ -29,4 +29,11 @@ return [
         'timeout' => (int) env('RUC_LOOKUP_TIMEOUT', 6),
         'cache_ttl' => (int) env('RUC_LOOKUP_CACHE_TTL', 86400),
     ],
+
+    'dni_lookup' => [
+        'api_url' => env('DNI_LOOKUP_API_URL', 'https://dniruc.apisperu.com/api/v1/dni'),
+        'api_token' => env('DNI_LOOKUP_API_TOKEN'),
+        'connect_timeout' => (int) env('DNI_LOOKUP_CONNECT_TIMEOUT', 3),
+        'timeout' => (int) env('DNI_LOOKUP_TIMEOUT', 6),
+    ],
 ];

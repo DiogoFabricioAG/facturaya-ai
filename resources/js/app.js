@@ -21,6 +21,7 @@ if (document.body.dataset.page === 'invoice') {
     const customerDocumentType = document.querySelector('#customer-document-type');
     const customerDocumentLabel = document.querySelector('#customer-document-label');
     const customerDocumentHelp = document.querySelector('#customer-document-help');
+    const customerLookupStatus = document.querySelector('#customer-lookup-status');
     const autosaveStatus = document.querySelector('#autosave-status');
     const accessGate = document.querySelector('#access-gate');
     const accessForm = document.querySelector('#company-access-form');
@@ -42,6 +43,8 @@ if (document.body.dataset.page === 'invoice') {
     let autoSaveTimer = null;
     let autoSaveChain = Promise.resolve();
     let creditSourceDraft = null;
+    let dniLookupTimer = null;
+    let dniLookupSequence = 0;
 
     const fullCreditReasons = ['01', '02', '06'];
     const creditReasonDefaults = {
@@ -189,6 +192,56 @@ if (document.body.dataset.page === 'invoice') {
         customerSaveStatus.hidden = true;
         const validDocument = documentTypeValue === '1' ? /^\d{8}$/.test(ruc) : /^\d{11}$/.test(ruc);
         saveCustomerChoice.hidden = !validDocument || form.elements.customer_name.value.trim() === '';
+    };
+
+    const setDniLookupStatus = (message, type = '') => {
+        customerLookupStatus.hidden = !message;
+        customerLookupStatus.className = `field-help customer-lookup-status${type ? ` is-${type}` : ''}`;
+        customerLookupStatus.textContent = message;
+    };
+
+    const lookupDni = async () => {
+        const dni = form.elements.customer_ruc.value.trim();
+        const sequence = ++dniLookupSequence;
+
+        if (customerDocumentType.value !== '1' || !/^\d{8}$/.test(dni) || !companyToken) {
+            setDniLookupStatus('');
+            return;
+        }
+
+        setDniLookupStatus('Buscando nombres del DNI…', 'loading');
+
+        try {
+            const customer = await api(`/api/customers/lookup-dni/${encodeURIComponent(dni)}`);
+            if (sequence !== dniLookupSequence || form.elements.customer_ruc.value.trim() !== dni) return;
+
+            if (!form.elements.customer_name.value.trim()) {
+                form.elements.customer_name.value = customer.name || '';
+                form.elements.customer_name.dataset.autoFilled = 'true';
+            }
+
+            await loadCustomers();
+            syncCustomerPrompt();
+            if (draft) scheduleAutoSave();
+            setDniLookupStatus(
+                form.elements.customer_name.value.trim() === customer.name
+                    ? 'Nombres encontrados y completados automáticamente.'
+                    : `DNI encontrado: ${customer.name}. Conservamos el nombre que escribiste.`,
+                'success',
+            );
+        } catch (error) {
+            if (sequence !== dniLookupSequence) return;
+            setDniLookupStatus(error.message || 'No pudimos consultar este DNI.', 'error');
+        }
+    };
+
+    const scheduleDniLookup = () => {
+        window.clearTimeout(dniLookupTimer);
+        dniLookupSequence += 1;
+        setDniLookupStatus('');
+
+        if (customerDocumentType.value !== '1' || !/^\d{8}$/.test(form.elements.customer_ruc.value.trim())) return;
+        dniLookupTimer = window.setTimeout(lookupDni, 350);
     };
 
     const saveCustomerIfRequested = async () => {
@@ -850,7 +903,13 @@ if (document.body.dataset.page === 'invoice') {
     });
     ['customer_ruc', 'customer_name', 'issue_date'].forEach((name) => {
         form.elements[name].addEventListener('input', () => {
+            if (name === 'customer_name') delete form.elements.customer_name.dataset.autoFilled;
+            if (name === 'customer_ruc' && form.elements.customer_name.dataset.autoFilled === 'true') {
+                form.elements.customer_name.value = '';
+                delete form.elements.customer_name.dataset.autoFilled;
+            }
             if (name !== 'issue_date') syncCustomerPrompt();
+            if (name === 'customer_ruc') scheduleDniLookup();
             scheduleAutoSave();
         });
     });
@@ -862,6 +921,7 @@ if (document.body.dataset.page === 'invoice') {
     customerDocumentType.addEventListener('change', () => {
         updateDocumentUi();
         syncCustomerPrompt();
+        scheduleDniLookup();
         scheduleAutoSave();
     });
     savedCustomer.addEventListener('change', () => {

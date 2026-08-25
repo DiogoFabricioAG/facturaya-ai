@@ -7,6 +7,13 @@ require_command docker
 require_command curl
 require_production_config
 
+# La consulta de DNI es opcional, pero Compose necesita que el archivo del
+# secreto exista aunque todavía no se haya configurado el token.
+if [[ ! -e "$project_dir/secrets/dni_lookup_token" ]]; then
+    : > "$project_dir/secrets/dni_lookup_token"
+    chmod 600 "$project_dir/secrets/dni_lookup_token"
+fi
+
 cd "$project_dir"
 app_domain="$(env_value APP_DOMAIN)"
 [[ -n "$app_domain" ]] || die "APP_DOMAIN está vacío en .env.production."

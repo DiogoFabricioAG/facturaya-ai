@@ -33,6 +33,7 @@ load_secret APP_KEY "${APP_KEY_FILE:-}" required
 load_secret DB_PASSWORD "${DB_PASSWORD_FILE:-}" required
 load_secret PLATFORM_ADMIN_TOKEN "${PLATFORM_ADMIN_TOKEN_FILE:-}" required
 load_secret OPENAI_API_KEY "${OPENAI_API_KEY_FILE:-}" optional
+load_secret DNI_LOOKUP_API_TOKEN "${DNI_LOOKUP_API_TOKEN_FILE:-}" optional
 
 if [ "${AI_DOCUMENT_DRIVER:-demo}" = "openai" ] && [ -z "${OPENAI_API_KEY:-}" ]; then
     echo "AI_DOCUMENT_DRIVER=openai requiere el secreto OPENAI_API_KEY." >&2

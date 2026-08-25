@@ -19,11 +19,13 @@ services:
       DB_PASSWORD_FILE: /run/secrets/db_password
       OPENAI_API_KEY_FILE: /run/secrets/openai_api_key
       PLATFORM_ADMIN_TOKEN_FILE: /run/secrets/platform_admin_token
+      DNI_LOOKUP_API_TOKEN_FILE: /run/secrets/dni_lookup_token
     secrets:
       - app_key
       - db_password
       - openai_api_key
       - platform_admin_token
+      - dni_lookup_token
     volumes:
       - app_storage:/var/www/html/storage
     depends_on:
@@ -76,3 +78,5 @@ secrets:
     file: ./secrets/openai_api_key
   platform_admin_token:
     file: ./secrets/platform_admin_token
+  dni_lookup_token:
+    file: ./secrets/dni_lookup_token

@@ -109,6 +109,50 @@ class InvoiceFlowTest extends TestCase
             && $request['ruc'] === '20557288016');
     }
 
+    public function test_dni_lookup_uses_api_peru_and_saves_the_customer(): void
+    {
+        config()->set('facturaya.dni_lookup.api_token', 'dni-test-token');
+        Http::fake([
+            'https://dniruc.apisperu.com/api/v1/dni/71434915*' => Http::response([
+                'success' => true,
+                'dni' => '71434915',
+                'nombres' => 'DIOGO FABRICIO',
+                'apellidoPaterno' => 'GONZALES',
+                'apellidoMaterno' => 'ABREGU',
+                'codVerifica' => 8,
+                'codVerificaLetra' => 'B',
+            ]),
+        ]);
+
+        $this->withToken($this->companyToken)
+            ->getJson('/api/customers/lookup-dni/71434915')
+            ->assertOk()
+            ->assertJsonPath('data.document_type', '1')
+            ->assertJsonPath('data.ruc', '71434915')
+            ->assertJsonPath('data.name', 'DIOGO FABRICIO GONZALES ABREGU')
+            ->assertJsonPath('meta.provider', 'api_peru_dni')
+            ->assertJsonPath('meta.nombres', 'DIOGO FABRICIO')
+            ->assertJsonPath('meta.cod_verifica_letra', 'B');
+
+        $this->withToken($this->companyToken)
+            ->getJson('/api/customers/lookup-dni/71434915')
+            ->assertOk()
+            ->assertJsonPath('meta.source', 'saved');
+
+        Http::assertSentCount(1);
+        Http::assertSent(fn ($request): bool => $request->method() === 'GET'
+            && str_contains($request->url(), '/71434915')
+            && str_contains($request->url(), 'token=dni-test-token'));
+    }
+
+    public function test_dni_lookup_validates_eight_digits(): void
+    {
+        $this->withToken($this->companyToken)
+            ->getJson('/api/customers/lookup-dni/7143491')
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'El DNI debe tener exactamente 8 dígitos.');
+    }
+
     public function test_customer_lookup_falls_back_to_openruc_when_api_peru_is_unavailable(): void
     {
         config()->set('facturaya.ruc_lookup.api_peru_token', 'api-peru-test-token');

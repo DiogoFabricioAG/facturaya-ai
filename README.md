@@ -71,6 +71,10 @@ OPENAI_CA_BUNDLE=
 
 SUNAT_DEFAULT_DRIVER=fake
 SUNAT_DEFAULT_ENVIRONMENT=beta
+
+DNI_LOOKUP_API_URL=https://dniruc.apisperu.com/api/v1/dni
+DNI_LOOKUP_CONNECT_TIMEOUT=3
+DNI_LOOKUP_TIMEOUT=6
 ```
 
 - `APP_KEY` cifra las credenciales SOL y certificados almacenados. No la cambies sin realizar una migración de secretos.
@@ -78,7 +82,7 @@ SUNAT_DEFAULT_ENVIRONMENT=beta
 - `SUNAT_DEFAULT_*` solo determina valores por defecto al crear una empresa; cada empresa guarda su configuración real.
 - `OPENAI_API_KEY` es global porque la plataforma paga y controla la extracción. Se puede separar por empresa en una etapa posterior si fuera necesario.
 
-En producción, `.env.production` solo contiene configuración no sensible. Los archivos `secrets/app_key`, `secrets/db_password`, `secrets/platform_admin_token` y `secrets/openai_api_key` están ignorados tanto por Git como por el contexto de construcción de Docker. Cada contenedor recibe únicamente los secretos que necesita. Esta disposición sigue la recomendación de [Docker Compose Secrets](https://docs.docker.com/compose/how-tos/use-secrets/) y mantiene la clave de OpenAI exclusivamente en el servidor, como indica la [documentación de autenticación de OpenAI](https://developers.openai.com/api/reference/overview#authentication).
+En producción, `.env.production` solo contiene configuración no sensible. Los archivos `secrets/app_key`, `secrets/db_password`, `secrets/platform_admin_token`, `secrets/openai_api_key` y `secrets/dni_lookup_token` están ignorados tanto por Git como por el contexto de construcción de Docker. Cada contenedor recibe únicamente los secretos que necesita. Esta disposición sigue la recomendación de [Docker Compose Secrets](https://docs.docker.com/compose/how-tos/use-secrets/) y mantiene los tokens exclusivamente en el servidor.
 
 ## Registrar una empresa
 
@@ -186,6 +190,8 @@ curl -X POST http://localhost:8000/api/invoice-drafts/import \
 ```
 
 Para una boleta usa `document_type=03`. El cliente puede identificarse con `customer_document_type=1` y un DNI de 8 dígitos, o con `customer_document_type=6` y un RUC de 11 dígitos. La serie de boleta se toma de `default_boleta_series` (por defecto `B001`). Las facturas usan `01` y las series `F` configuradas.
+
+La pantalla consulta automáticamente `GET /api/customers/lookup-dni/{dni}` cuando se introduce un DNI de 8 dígitos. Laravel consulta ApiPeru, completa los nombres y guarda el cliente dentro de la empresa. El token nunca llega al navegador.
 
 Modalidades tributarias:
 
