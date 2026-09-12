@@ -71,7 +71,7 @@
                 <form id="import-form" class="capture-panel">
                     <div class="section-heading">
                         <span class="section-number">1</span>
-                        <div><h2>¿A quién facturamos?</h2><p>Datos del cliente que recibirá la factura.</p></div>
+                        <div><h2>¿A quién facturamos?</h2><p>Datos del cliente que recibirá el comprobante.</p></div>
                     </div>
                     <label class="field saved-customer-field">
                         <span>Cliente guardado</span>
@@ -89,19 +89,21 @@
                             </select>
                             <small>Define la serie y el XML que enviaremos.</small>
                         </label>
-                        <label class="field">
+                        <label id="customer-document-type-field" class="field">
                             <span>Documento del cliente</span>
                             <select id="customer-document-type" name="customer_document_type" required>
+                                <option value="0">Consumidor final (sin documento)</option>
                                 <option value="6">RUC</option>
                                 <option value="1">DNI</option>
                             </select>
+                            <small id="anonymous-customer-help" class="field-help" hidden>Hasta S/ 700.00 no necesitas identificar al comprador. Si solicita datos o deducción, elige DNI/RUC.</small>
                         </label>
-                        <label class="field">
+                        <label id="customer-document-number-field" class="field">
                             <span id="customer-document-label">Número de RUC</span>
                             <input name="customer_ruc" inputmode="numeric" pattern="[0-9]{11}" maxlength="11" placeholder="20123456789" autocomplete="off" required>
                             <small id="customer-document-help">11 dígitos</small>
                         </label>
-                        <label class="field field-wide">
+                        <label id="customer-name-field" class="field field-wide">
                             <span>Nombre o razón social</span>
                             <input name="customer_name" maxlength="255" placeholder="Ej. Comercial Andina S.A.C." autocomplete="organization" required>
                             <small id="customer-lookup-status" class="field-help customer-lookup-status" aria-live="polite" hidden></small>
@@ -182,6 +184,7 @@
                             <p id="customer-save-status" class="customer-save-status" role="status" hidden></p>
                         </div>
                         <div id="warnings" class="warnings" hidden></div>
+                        <div id="boleta-identification-warning" class="boleta-identification-warning" role="status" hidden></div>
                         <div class="table-scroll">
                             <table class="items-table">
                                 <thead><tr><th>Descripción</th><th>Cant.</th><th>P. unit.</th><th>Total</th><th><span class="sr-only">Eliminar</span></th></tr></thead>

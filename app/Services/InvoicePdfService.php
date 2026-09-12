@@ -41,6 +41,11 @@ final class InvoicePdfService
         $company = $invoice->company;
         $draft = $invoice->draft;
         $digest = $this->extractDigest($invoice);
+        $documentType = (string) ($invoice->document_type ?: $draft->document_type ?: '01');
+        $customerDocumentType = $draft->customer_document_type !== null
+            ? (string) $draft->customer_document_type
+            : ($documentType === '03' ? '0' : '6');
+        $anonymousCustomer = $documentType === '03' && $customerDocumentType === '0';
 
         $data = [
             'number' => $invoice->number,
@@ -56,9 +61,9 @@ final class InvoicePdfService
             'company_name' => trim((string) $company->legal_name) ?: 'Empresa emisora',
             'company_ruc' => (string) $company->ruc,
             'company_address' => $this->address($company),
-            'customer_name' => trim((string) $draft->customer_name) ?: 'Cliente',
-            'customer_ruc' => (string) $draft->customer_ruc,
-            'customer_document_label' => ($draft->customer_document_type ?: '6') === '1' ? 'DNI' : 'RUC',
+            'customer_name' => $anonymousCustomer ? 'Consumidor final' : (trim((string) $draft->customer_name) ?: 'Cliente'),
+            'customer_ruc' => $anonymousCustomer ? 'No consignado' : (string) $draft->customer_ruc,
+            'customer_document_label' => $anonymousCustomer ? 'SIN DOCUMENTO' : ($customerDocumentType === '1' ? 'DNI' : 'RUC'),
             'issue_date' => optional($draft->issue_date)->format('d/m/Y') ?: '—',
             'currency' => (string) ($draft->currency ?: 'PEN'),
             'subtotal' => $this->money($draft->subtotal),
@@ -148,7 +153,7 @@ final class InvoicePdfService
                 self::PAGE_HEIGHT,
                 $contentObject,
             );
-            $objects[$contentObject] = "<< /Length ".strlen($stream)." >>\nstream\n".$stream."\nendstream";
+            $objects[$contentObject] = '<< /Length '.strlen($stream)." >>\nstream\n".$stream."\nendstream";
         }
 
         $objects[2] = '<< /Type /Pages /Kids ['.implode(' ', $pageReferences).'] /Count '.count($pages).' >>';
@@ -216,6 +221,7 @@ final class InvoicePdfService
             $this->text($commands, 367, 610, (string) $data['issue_date'], 10, '/F2', self::NAVY);
             $this->text($commands, 470, 630, 'MONEDA', 7, '/F2', self::MUTED);
             $this->text($commands, 470, 610, (string) $data['currency'], 10, '/F2', self::NAVY);
+
             return 555;
         }
 

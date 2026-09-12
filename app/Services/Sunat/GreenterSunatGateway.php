@@ -8,6 +8,7 @@ use App\Models\CreditNote as StoredCreditNote;
 use App\Models\Invoice as StoredInvoice;
 use App\Models\InvoiceDraft;
 use App\Services\AmountInWords;
+use App\Services\BoletaCustomerPolicy;
 use App\Services\CompanyCertificateStore;
 use DateTime;
 use DateTimeZone;
@@ -29,6 +30,7 @@ final class GreenterSunatGateway implements SunatGateway
     public function __construct(
         private readonly AmountInWords $amountInWords,
         private readonly CompanyCertificateStore $certificates,
+        private readonly BoletaCustomerPolicy $boletaCustomerPolicy,
     ) {}
 
     public function issue(InvoiceDraft $draft, StoredInvoice $invoice): array
@@ -184,10 +186,7 @@ final class GreenterSunatGateway implements SunatGateway
             ->setAddress($address);
 
         $documentType = (string) ($storedInvoice->document_type ?: $draft->document_type ?: '01');
-        $client = (new Client)
-            ->setTipoDoc((string) ($draft->customer_document_type ?: ($documentType === '03' ? '1' : '6')))
-            ->setNumDoc($draft->customer_ruc)
-            ->setRznSocial($draft->customer_name);
+        $client = $this->makeClient($draft, $documentType);
 
         $details = $draft->items->map(fn ($item) => (new SaleDetail)
             ->setCodProducto('ITEM-'.str_pad((string) $item->position, 3, '0', STR_PAD_LEFT))
@@ -247,10 +246,10 @@ final class GreenterSunatGateway implements SunatGateway
             ->setNombreComercial($storedCompany->trade_name ?: $storedCompany->legal_name)
             ->setAddress($address);
 
-        $client = (new Client)
-            ->setTipoDoc((string) ($draft->customer_document_type ?: ($storedNote->invoice->document_type === '03' ? '1' : '6')))
-            ->setNumDoc($draft->customer_ruc)
-            ->setRznSocial($draft->customer_name);
+        $client = $this->makeClient(
+            $draft,
+            (string) ($storedNote->invoice->document_type ?: '01'),
+        );
 
         $details = $storedNote->items->map(fn ($item) => (new SaleDetail)
             ->setCodProducto('ITEM-'.str_pad((string) $item->position, 3, '0', STR_PAD_LEFT))
@@ -292,5 +291,26 @@ final class GreenterSunatGateway implements SunatGateway
                     ->setCode('1000')
                     ->setValue($this->amountInWords->currency($storedNote->total, $storedNote->currency)),
             ]);
+    }
+
+    private function makeClient(InvoiceDraft $draft, string $documentType): Client
+    {
+        $customerType = $this->boletaCustomerPolicy->customerType($draft);
+
+        if ($documentType === '03' && $customerType === '0') {
+            // Greenter's UBL template expects a Client object even when SUNAT
+            // does not require buyer identification. Catalog 06 code 0 is the
+            // no-document representation; '-' is an alphanumeric placeholder
+            // allowed for this catalog entry and is never shown as a DNI.
+            return (new Client)
+                ->setTipoDoc('0')
+                ->setNumDoc('-')
+                ->setRznSocial('CLIENTE VARIOS');
+        }
+
+        return (new Client)
+            ->setTipoDoc($customerType)
+            ->setNumDoc($draft->customer_ruc)
+            ->setRznSocial($draft->customer_name);
     }
 }

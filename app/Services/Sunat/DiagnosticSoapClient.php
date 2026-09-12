@@ -60,8 +60,7 @@ final class DiagnosticSoapClient extends SoapClient
         string $requestHeaders,
         string $response,
         string $responseHeaders,
-    ): array
-    {
+    ): array {
         preg_match_all('/^HTTP\/\S+\s+(\d{3})(?:\s+([^\r\n]+))?/mi', $responseHeaders, $statusMatches, PREG_SET_ORDER);
         $lastStatus = $statusMatches === [] ? null : end($statusMatches);
 

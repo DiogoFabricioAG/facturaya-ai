@@ -19,6 +19,10 @@ if (document.body.dataset.page === 'invoice') {
     const issueButton = document.querySelector('#issue-button');
     const documentType = document.querySelector('#document-type');
     const customerDocumentType = document.querySelector('#customer-document-type');
+    const customerDocumentTypeField = document.querySelector('#customer-document-type-field');
+    const customerDocumentNumberField = document.querySelector('#customer-document-number-field');
+    const customerNameField = document.querySelector('#customer-name-field');
+    const anonymousCustomerHelp = document.querySelector('#anonymous-customer-help');
     const customerDocumentLabel = document.querySelector('#customer-document-label');
     const customerDocumentHelp = document.querySelector('#customer-document-help');
     const customerLookupStatus = document.querySelector('#customer-lookup-status');
@@ -160,14 +164,29 @@ if (document.body.dataset.page === 'invoice') {
 
     const updateDocumentUi = (resetCustomerType = false) => {
         const isBoleta = documentType.value === '03';
-        if (resetCustomerType) customerDocumentType.value = isBoleta ? '1' : '6';
+        if (resetCustomerType) customerDocumentType.value = isBoleta ? '0' : '6';
 
+        const isAnonymous = isBoleta && customerDocumentType.value === '0';
         const isDni = customerDocumentType.value === '1';
+        const anonymousOption = customerDocumentType.querySelector('option[value="0"]');
+        if (anonymousOption) anonymousOption.hidden = !isBoleta;
+        if (!isBoleta && customerDocumentType.value === '0') customerDocumentType.value = '6';
+        customerDocumentTypeField.hidden = false;
+        customerDocumentNumberField.hidden = isAnonymous;
+        customerNameField.hidden = isAnonymous;
+        anonymousCustomerHelp.hidden = !isAnonymous;
+        if (isAnonymous) {
+            form.elements.customer_ruc.value = '';
+            form.elements.customer_name.value = '';
+            delete form.elements.customer_name.dataset.autoFilled;
+        }
+        form.elements.customer_ruc.required = !isAnonymous;
+        form.elements.customer_name.required = !isAnonymous;
         form.elements.customer_ruc.maxLength = isDni ? 8 : 11;
         form.elements.customer_ruc.pattern = isDni ? '[0-9]{8}' : '[0-9]{11}';
         form.elements.customer_ruc.placeholder = isDni ? '12345678' : '20123456789';
-        customerDocumentLabel.textContent = isDni ? 'Número de DNI' : 'Número de RUC';
-        customerDocumentHelp.textContent = isDni ? '8 dígitos' : '11 dígitos';
+        customerDocumentLabel.textContent = isAnonymous ? 'Documento del cliente' : (isDni ? 'Número de DNI' : 'Número de RUC');
+        customerDocumentHelp.textContent = isAnonymous ? 'No se consignará en la boleta.' : (isDni ? '8 dígitos' : '11 dígitos');
         document.querySelector('#page-title').innerHTML = isBoleta
             ? 'De tus palabras a la boleta, <span>en una sola revisión.</span>'
             : 'De tus palabras a la factura, <span>en una sola revisión.</span>';
@@ -175,9 +194,26 @@ if (document.body.dataset.page === 'invoice') {
         issueButton.dataset.originalLabel = issueLabel;
         issueButton.querySelector('span').textContent = issueLabel;
         document.querySelector('#preview-title').textContent = draft ? 'Revisa los datos extraídos' : `Tu ${isBoleta ? 'boleta' : 'factura'} aparecerá aquí`;
+        if (draft) {
+            const summaryAnonymous = isBoleta && customerDocumentType.value === '0';
+            document.querySelector('#summary-client').textContent = summaryAnonymous
+                ? 'Consumidor final'
+                : (form.elements.customer_name.value.trim() || 'Cliente');
+            document.querySelector('#summary-ruc').textContent = summaryAnonymous
+                ? `Sin documento · ${form.elements.issue_date.value}`
+                : `${customerDocumentType.value === '1' ? 'DNI' : 'RUC'} ${form.elements.customer_ruc.value} · ${form.elements.issue_date.value}`;
+            refreshAnonymousBoletaNotice(calculatePreviewTotals().total);
+        }
     };
 
     const syncCustomerPrompt = () => {
+        if (documentType.value === '03' && customerDocumentType.value === '0') {
+            saveCustomerChoice.hidden = true;
+            saveCustomerCheckbox.checked = false;
+            customerSaveStatus.hidden = true;
+            return;
+        }
+
         const ruc = form.elements.customer_ruc.value.trim();
         const documentTypeValue = customerDocumentType.value;
         const existing = findCustomer(ruc, documentTypeValue);
@@ -303,10 +339,11 @@ if (document.body.dataset.page === 'invoice') {
     const renderDraft = (value) => {
         draft = value;
         documentType.value = draft.document_type || '01';
-        customerDocumentType.value = draft.customer.document_type || (documentType.value === '03' ? '1' : '6');
+        customerDocumentType.value = draft.customer.document_type ?? (documentType.value === '03' ? '0' : '6');
+        const anonymousDraft = documentType.value === '03' && customerDocumentType.value === '0';
         updateDocumentUi();
-        form.elements.customer_ruc.value = draft.customer.ruc || '';
-        form.elements.customer_name.value = draft.customer.name || '';
+        form.elements.customer_ruc.value = anonymousDraft ? '' : (draft.customer.ruc || '');
+        form.elements.customer_name.value = anonymousDraft ? '' : (draft.customer.name || '');
         form.elements.issue_date.value = draft.issue_date || '';
         form.querySelectorAll('input[name="tax_mode"]').forEach((input) => {
             input.checked = input.value === draft.tax_mode;
@@ -317,8 +354,11 @@ if (document.body.dataset.page === 'invoice') {
         loadingPreview.hidden = true;
         draftPreview.hidden = false;
         document.querySelector('#preview-title').textContent = 'Revisa los datos extraídos';
-        document.querySelector('#summary-client').textContent = draft.customer.name;
-        document.querySelector('#summary-ruc').textContent = `${draft.customer.document_type === '1' ? 'DNI' : 'RUC'} ${draft.customer.ruc} · ${draft.issue_date}`;
+        const anonymousCustomer = anonymousDraft;
+        document.querySelector('#summary-client').textContent = anonymousCustomer ? 'Consumidor final' : (draft.customer.name || 'Cliente');
+        document.querySelector('#summary-ruc').textContent = anonymousCustomer
+            ? `Sin documento · ${draft.issue_date}`
+            : `${draft.customer.document_type === '1' ? 'DNI' : 'RUC'} ${draft.customer.ruc} · ${draft.issue_date}`;
         document.querySelector('#summary-company').textContent = `Emisor: ${draft.company.legal_name} · RUC ${draft.company.ruc}`;
         syncCustomerPrompt();
         draftStatus.textContent = draft.status === 'issued' ? 'Emitida' : 'Lista para revisar';
@@ -329,6 +369,7 @@ if (document.body.dataset.page === 'invoice') {
         document.querySelector('#subtotal').textContent = money(draft.totals.subtotal, draft.currency);
         document.querySelector('#igv').textContent = money(draft.totals.igv, draft.currency);
         document.querySelector('#total').textContent = money(draft.totals.total, draft.currency);
+        refreshAnonymousBoletaNotice(Number(draft.totals.total || 0));
 
         const warningBox = document.querySelector('#warnings');
         warningBox.hidden = !draft.warnings?.length;
@@ -350,6 +391,8 @@ if (document.body.dataset.page === 'invoice') {
         loadingPreview.hidden = true;
         draftPreview.hidden = true;
         document.querySelector('#preview-title').textContent = 'Tu factura aparecerá aquí';
+        document.querySelector('#boleta-identification-warning').hidden = true;
+        document.querySelector('#boleta-identification-warning').textContent = '';
         draftStatus.textContent = 'Esperando productos';
         draftStatus.className = 'status-badge';
         setAutosaveStatus('Los cambios se guardan automáticamente');
@@ -395,9 +438,22 @@ if (document.body.dataset.page === 'invoice') {
         return { base, igv, total: roundMoney(base + igv) };
     };
 
-    const refreshPreviewTotals = () => {
-        if (!draft) return;
+    const refreshAnonymousBoletaNotice = (total) => {
+        const notice = document.querySelector('#boleta-identification-warning');
+        if (!notice) return;
 
+        const anonymous = documentType.value === '03' && customerDocumentType.value === '0';
+        const foreignCurrency = draft && draft.currency && draft.currency !== 'PEN';
+        const requiresIdentification = Number(total) > 700 || foreignCurrency;
+        notice.hidden = !anonymous || !requiresIdentification;
+        notice.textContent = notice.hidden
+            ? ''
+            : foreignCurrency
+                ? 'Las boletas en moneda distinta a PEN deben identificar al cliente con DNI o RUC.'
+                : 'Esta boleta supera S/ 700.00. Identifica al cliente con DNI o RUC antes de emitirla.';
+    };
+
+    const calculatePreviewTotals = () => {
         let subtotal = 0;
         let igv = 0;
         let total = 0;
@@ -435,17 +491,34 @@ if (document.body.dataset.page === 'invoice') {
             lineTotalCell.textContent = money(lineTotal, draft.currency);
         });
 
-        document.querySelector('#subtotal').textContent = money(roundMoney(subtotal), draft.currency);
-        document.querySelector('#igv').textContent = money(roundMoney(igv), draft.currency);
-        document.querySelector('#total').textContent = money(roundMoney(total), draft.currency);
+        return {
+            subtotal: roundMoney(subtotal),
+            igv: roundMoney(igv),
+            total: roundMoney(total),
+        };
+    };
+
+    const refreshPreviewTotals = () => {
+        if (!draft) return { subtotal: 0, igv: 0, total: 0 };
+
+        const totals = calculatePreviewTotals();
+        document.querySelector('#subtotal').textContent = money(totals.subtotal, draft.currency);
+        document.querySelector('#igv').textContent = money(totals.igv, draft.currency);
+        document.querySelector('#total').textContent = money(totals.total, draft.currency);
+        refreshAnonymousBoletaNotice(totals.total);
+        return totals;
     };
 
     const reviewFieldsAreValid = () => {
-        const customerIsValid = (customerDocumentType.value === '1'
-            ? /^\d{8}$/.test(form.elements.customer_ruc.value)
-            : /^\d{11}$/.test(form.elements.customer_ruc.value))
-            && form.elements.customer_name.value.trim() !== ''
-            && form.elements.issue_date.value !== '';
+        const anonymousBoleta = documentType.value === '03' && customerDocumentType.value === '0';
+        const previewTotals = calculatePreviewTotals();
+        const customerIsValid = anonymousBoleta
+            ? previewTotals.total <= 700 && (!draft?.currency || draft.currency === 'PEN') && form.elements.issue_date.value !== ''
+            : (customerDocumentType.value === '1'
+                ? /^\d{8}$/.test(form.elements.customer_ruc.value)
+                : /^\d{11}$/.test(form.elements.customer_ruc.value))
+                && form.elements.customer_name.value.trim() !== ''
+                && form.elements.issue_date.value !== '';
         const itemsAreValid = [...itemsBody.querySelectorAll('tr')].every((row) => {
             const quantityValue = row.querySelector('.quantity').value;
             const priceValue = row.querySelector('.price').value;
@@ -514,7 +587,17 @@ if (document.body.dataset.page === 'invoice') {
         clearTimeout(autoSaveTimer);
         await autoSaveChain.catch(() => {});
 
-        if (!reviewFieldsAreValid()) throw new Error('Completa correctamente todos los conceptos antes de emitir.');
+        if (!reviewFieldsAreValid()) {
+            if (documentType.value === '03' && customerDocumentType.value === '0' && draft?.currency && draft.currency !== 'PEN') {
+                throw new Error('Las boletas en moneda distinta a PEN deben identificar al cliente con DNI o RUC.');
+            }
+
+            if (documentType.value === '03' && customerDocumentType.value === '0' && calculatePreviewTotals().total > 700) {
+                throw new Error('Esta boleta supera S/ 700.00. Selecciona DNI o RUC e identifica al cliente antes de emitirla.');
+            }
+
+            throw new Error('Completa correctamente todos los conceptos antes de emitir.');
+        }
 
         setAutosaveStatus('Guardando…', 'saving');
         const updated = await saveDraft();
@@ -627,7 +710,9 @@ if (document.body.dataset.page === 'invoice') {
         creditReasonCode.value = '01';
         creditReasonDescription.value = creditReasonDefaults['01'];
         document.querySelector('#credit-invoice-number').textContent = source.invoice.number;
-        document.querySelector('#credit-customer').textContent = `${source.customer.name} · ${source.customer.document_type === '1' ? 'DNI' : 'RUC'} ${source.customer.ruc}`;
+        document.querySelector('#credit-customer').textContent = source.customer.is_anonymous
+            ? 'Consumidor final · Sin documento'
+            : `${source.customer.name} · ${source.customer.document_type === '1' ? 'DNI' : 'RUC'} ${source.customer.ruc}`;
         const creditSeries = source.document_type === '03'
             ? (company.default_boleta_credit_note_series || 'BC01')
             : (company.default_credit_note_series || 'FC01');
@@ -707,7 +792,7 @@ if (document.body.dataset.page === 'invoice') {
             }
             return `<tr>
                 <td><span class="mono-date">${escapeHtml(item.issue_date)}</span></td>
-                <td><strong>${escapeHtml(item.customer.name)}</strong><small>${item.customer.document_type === '1' ? 'DNI' : 'RUC'} ${escapeHtml(item.customer.ruc)}</small></td>
+                <td><strong>${escapeHtml(item.customer.is_anonymous ? 'Consumidor final' : item.customer.name)}</strong><small>${item.customer.is_anonymous ? 'Sin documento' : `${item.customer.document_type === '1' ? 'DNI' : 'RUC'} ${escapeHtml(item.customer.ruc)}`}</small></td>
                 <td><strong>${escapeHtml(item.invoice?.number || 'Borrador')}</strong><small>${item.invoice?.document_type === '03' ? 'Boleta' : 'Factura'}</small>${invoiceEnvironment}${invoiceFileList}${noteList}</td>
                 <td><strong>${money(item.totals.total, item.currency)}</strong></td>
                 <td><span class="activity-status status-${escapeHtml(status)}">${escapeHtml(label)}</span></td>

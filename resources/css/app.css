@@ -173,6 +173,7 @@ h2 { margin: 0; font-size: 20px; line-height: 1.25; letter-spacing: -.025em; }
 .customer-lookup-status.is-loading { color: var(--cobalt); }
 .customer-lookup-status.is-success { color: var(--mint-dark); }
 .customer-lookup-status.is-error { color: #913126; }
+.boleta-identification-warning { margin: 16px 0 0; padding: 12px 14px; border-left: 3px solid var(--amber); color: #6e5418; background: #fff8e3; font-size: 11px; line-height: 1.5; }
 .divider { height: 1px; margin: 34px 0; background: var(--line); }
 .tax-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .tax-choice { cursor: pointer; }

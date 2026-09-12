@@ -9,19 +9,25 @@ class InvoiceDraftResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $documentType = (string) ($this->document_type ?? '01');
+        $customerDocumentType = $this->customer_document_type !== null
+            ? (string) $this->customer_document_type
+            : ($documentType === '03' ? '0' : '6');
+
         return [
             'id' => $this->id,
             'status' => $this->status,
-            'document_type' => $this->document_type ?: '01',
+            'document_type' => $documentType,
             'company' => $this->whenLoaded('company', fn () => [
                 'id' => $this->company->id,
                 'ruc' => $this->company->ruc,
                 'legal_name' => $this->company->legal_name,
             ]),
             'customer' => [
-                'document_type' => $this->customer_document_type ?: '6',
+                'document_type' => $customerDocumentType,
                 'ruc' => $this->customer_ruc,
                 'name' => $this->customer_name,
+                'is_anonymous' => $documentType === '03' && $customerDocumentType === '0',
             ],
             'issue_date' => $this->issue_date?->format('Y-m-d'),
             'tax_mode' => $this->tax_mode,

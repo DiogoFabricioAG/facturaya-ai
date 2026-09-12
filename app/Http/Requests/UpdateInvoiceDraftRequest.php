@@ -9,12 +9,17 @@ class UpdateInvoiceDraftRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $documentType = (string) $this->input('document_type', '01');
+        $customerDocumentType = $this->input('customer_document_type');
+        $customerDocumentType = $customerDocumentType === null || trim((string) $customerDocumentType) === ''
+            ? ($documentType === '03' ? '0' : '6')
+            : (string) $customerDocumentType;
+        $anonymousBoleta = $documentType === '03' && $customerDocumentType === '0';
+
         $this->merge([
             'document_type' => $documentType,
-            'customer_document_type' => (string) $this->input(
-                'customer_document_type',
-                $documentType === '03' ? '1' : '6',
-            ),
+            'customer_document_type' => $customerDocumentType,
+            'customer_ruc' => $anonymousBoleta || blank($this->input('customer_ruc')) ? null : trim((string) $this->input('customer_ruc')),
+            'customer_name' => $anonymousBoleta || blank($this->input('customer_name')) ? null : trim((string) $this->input('customer_name')),
         ]);
     }
 
@@ -25,16 +30,17 @@ class UpdateInvoiceDraftRequest extends FormRequest
 
     public function rules(): array
     {
+        $documentType = (string) $this->input('document_type', '01');
         $customerDocumentType = (string) $this->input('customer_document_type', '6');
 
         return [
             'document_type' => ['required', 'in:01,03'],
-            'customer_document_type' => ['required', 'in:1,6'],
+            'customer_document_type' => ['required', $documentType === '03' ? 'in:0,1,6' : 'in:1,6'],
             'customer_ruc' => [
-                'required',
-                $customerDocumentType === '6' ? 'regex:/^\d{11}$/' : 'regex:/^\d{8}$/',
+                $customerDocumentType === '0' ? 'nullable' : 'required',
+                $customerDocumentType === '0' ? 'nullable' : ($customerDocumentType === '6' ? 'regex:/^\d{11}$/' : 'regex:/^\d{8}$/'),
             ],
-            'customer_name' => ['required', 'string', 'max:255'],
+            'customer_name' => [$customerDocumentType === '0' ? 'nullable' : 'required', 'nullable', 'string', 'max:255'],
             'issue_date' => ['required', 'date_format:Y-m-d'],
             'tax_mode' => ['required', 'in:included,excluded'],
             'currency' => ['required', 'in:PEN,USD'],

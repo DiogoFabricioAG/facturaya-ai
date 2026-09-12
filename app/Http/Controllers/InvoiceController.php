@@ -5,9 +5,10 @@ namespace App\Http\Controllers;
 use App\Http\Resources\InvoiceResource;
 use App\Models\Invoice;
 use App\Models\InvoiceDraft;
+use App\Services\BoletaCustomerPolicy;
 use App\Services\CompanyContext;
-use App\Services\InvoiceSequenceService;
 use App\Services\InvoicePdfService;
+use App\Services\InvoiceSequenceService;
 use App\Services\Sunat\SunatGatewayManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
@@ -22,9 +23,16 @@ class InvoiceController extends Controller
         InvoiceSequenceService $sequences,
         SunatGatewayManager $gateways,
         CompanyContext $context,
+        BoletaCustomerPolicy $boletaCustomerPolicy,
     ): JsonResponse {
         abort_unless($context->owns($invoiceDraft->company_id), 404);
         $company = $context->company();
+
+        $customerError = $boletaCustomerPolicy->validate($invoiceDraft);
+        if ($customerError !== null) {
+            return response()->json(['message' => $customerError], 422);
+        }
+
         $invoice = $invoiceDraft->invoice;
         $statusCode = 201;
 
@@ -123,8 +131,7 @@ class InvoiceController extends Controller
         string $type,
         CompanyContext $context,
         InvoicePdfService $pdfs,
-    ): Response|StreamedResponse|JsonResponse
-    {
+    ): Response|StreamedResponse|JsonResponse {
         abort_unless($context->owns($invoice->company_id), 404);
 
         if ($type === 'pdf') {

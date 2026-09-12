@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Exceptions\RucLookupUnavailable;
 use App\Exceptions\DniLookupUnavailable;
+use App\Exceptions\RucLookupUnavailable;
 use App\Http\Requests\StoreCustomerRequest;
 use App\Http\Resources\CustomerResource;
 use App\Models\Customer;

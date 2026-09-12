@@ -189,7 +189,20 @@ curl -X POST http://localhost:8000/api/invoice-drafts/import \
   -F "file=@cotizacion.pdf"
 ```
 
-Para una boleta usa `document_type=03`. El cliente puede identificarse con `customer_document_type=1` y un DNI de 8 dígitos, o con `customer_document_type=6` y un RUC de 11 dígitos. La serie de boleta se toma de `default_boleta_series` (por defecto `B001`). Las facturas usan `01` y las series `F` configuradas.
+Para una boleta a consumidor final, omite los datos personales o envía explícitamente el tipo `0`:
+
+```bash
+curl -X POST http://localhost:8000/api/invoice-drafts/import \
+  -H "Accept: application/json" \
+  -H "Authorization: Bearer fya_TOKEN_DE_LA_EMPRESA" \
+  -F "document_type=03" \
+  -F "customer_document_type=0" \
+  -F "issue_date=2026-08-15" \
+  -F "tax_mode=included" \
+  -F "products_text=Venta de un accesorio a S/ 50"
+```
+
+Para una boleta usa `document_type=03`. Si el total final no supera S/ 700.00 y el comprador no solicita identificación, puedes enviar `customer_document_type=0` sin DNI/RUC; la interfaz lo presenta como `Consumidor final`. Por encima de S/ 700.00, o si el comprador solicita sus datos, debes usar `customer_document_type=1` con un DNI de 8 dígitos o `customer_document_type=6` con un RUC de 11 dígitos, junto con el nombre. La serie de boleta se toma de `default_boleta_series` (por defecto `B001`). Las facturas usan `01` y las series `F` configuradas.
 
 La pantalla consulta automáticamente `GET /api/customers/lookup-dni/{dni}` cuando se introduce un DNI de 8 dígitos. Laravel consulta ApiPeru, completa los nombres y guarda el cliente dentro de la empresa. El token nunca llega al navegador.
 

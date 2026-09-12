@@ -63,14 +63,20 @@ final class FakeSunatGateway implements SunatGateway
 
     private function fakeXml(InvoiceDraft $draft, Invoice $invoice): string
     {
-        $customer = htmlspecialchars($draft->customer_name, ENT_XML1);
         $documentType = (string) ($invoice->document_type ?: $draft->document_type ?: '01');
+        $customerDocumentType = $draft->customer_document_type !== null
+            ? (string) $draft->customer_document_type
+            : ($documentType === '03' ? '0' : '6');
+        $anonymous = $documentType === '03' && $customerDocumentType === '0';
+        $customerDocument = $anonymous ? '-' : (string) $draft->customer_ruc;
+        $customerName = $anonymous ? 'CLIENTE VARIOS' : (string) $draft->customer_name;
+        $customer = htmlspecialchars($customerName, ENT_XML1);
 
         return <<<XML
 <?xml version="1.0" encoding="UTF-8"?>
 <Invoice demo="true" documentType="{$documentType}">
   <ID>{$invoice->series}-{$invoice->correlative}</ID>
-  <CustomerDocument type="{$draft->customer_document_type}">{$draft->customer_ruc}</CustomerDocument>
+  <CustomerDocument type="{$customerDocumentType}">{$customerDocument}</CustomerDocument>
   <CustomerName>{$customer}</CustomerName>
   <TaxableAmount>{$draft->subtotal}</TaxableAmount>
   <TaxAmount>{$draft->igv}</TaxAmount>
