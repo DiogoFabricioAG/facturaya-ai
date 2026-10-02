@@ -8,6 +8,9 @@ use InvalidArgumentException;
 
 final class IgvCalculator
 {
+    /** Versión del cálculo de vista previa; participa de la huella. */
+    public const CALCULATION_VERSION = 1;
+
     private const IGV_FACTOR = '0.18';
 
     private const TOTAL_FACTOR = '1.18';
@@ -78,6 +81,92 @@ final class IgvCalculator
 
         foreach ($items as $item) {
             $calculated = $this->calculateItem($item['quantity'], $item['unit_price'], $taxMode);
+            $subtotal = $subtotal->plus($calculated['line_base']);
+            $igv = $igv->plus($calculated['igv']);
+            $total = $total->plus($calculated['line_total']);
+            $calculatedItems[] = $calculated;
+        }
+
+        return [
+            'subtotal' => $subtotal->toScale(2, RoundingMode::HalfUp)->__toString(),
+            'igv' => $igv->toScale(2, RoundingMode::HalfUp)->__toString(),
+            'total' => $total->toScale(2, RoundingMode::HalfUp)->__toString(),
+            'items' => $calculatedItems,
+        ];
+    }
+
+    /**
+     * Calcula una línea desde el total final acordado, sin redondear un
+     * precio unitario intermedio. Con IGV incluido el total se conserva tal
+     * como llegó; con IGV excluido el total es la base.
+     *
+     * @return array{
+     *   quantity: string,
+     *   entered_unit_price: string,
+     *   unit_value: string,
+     *   unit_price_with_igv: string,
+     *   line_base: string,
+     *   igv: string,
+     *   line_total: string
+     * }
+     */
+    public function calculateItemFromTotal(string $quantity, string $lineTotal, string $taxMode): array
+    {
+        if (! in_array($taxMode, ['included', 'excluded'], true)) {
+            throw new InvalidArgumentException('El modo de IGV debe ser included o excluded.');
+        }
+
+        $qty = BigDecimal::of($quantity);
+        $total = BigDecimal::of($lineTotal);
+
+        if ($qty->isLessThanOrEqualTo(BigDecimal::zero())) {
+            throw new InvalidArgumentException('La cantidad debe ser mayor que cero.');
+        }
+
+        if ($total->isLessThanOrEqualTo(BigDecimal::zero())) {
+            throw new InvalidArgumentException('El total de la línea debe ser mayor que cero.');
+        }
+
+        if ($taxMode === 'included') {
+            $lineTotal = $total->toScale(2, RoundingMode::HalfUp);
+            $lineBase = $lineTotal->dividedBy(self::TOTAL_FACTOR, 2, RoundingMode::HalfUp);
+            $igv = $lineTotal->minus($lineBase)->toScale(2, RoundingMode::HalfUp);
+            $unitValue = $lineBase->dividedBy($qty, 6, RoundingMode::HalfUp);
+            $unitPriceWithIgv = $lineTotal->dividedBy($qty, 6, RoundingMode::HalfUp);
+            $enteredUnitPrice = $lineTotal->dividedBy($qty, 2, RoundingMode::HalfUp);
+        } else {
+            $lineBase = $total->toScale(2, RoundingMode::HalfUp);
+            $igv = $lineBase->multipliedBy(self::IGV_FACTOR)->toScale(2, RoundingMode::HalfUp);
+            $lineTotal = $lineBase->plus($igv)->toScale(2, RoundingMode::HalfUp);
+            $unitValue = $lineBase->dividedBy($qty, 6, RoundingMode::HalfUp);
+            $unitPriceWithIgv = $lineTotal->dividedBy($qty, 6, RoundingMode::HalfUp);
+            $enteredUnitPrice = $lineBase->dividedBy($qty, 2, RoundingMode::HalfUp);
+        }
+
+        return [
+            'quantity' => $qty->toScale(3, RoundingMode::HalfUp)->__toString(),
+            'entered_unit_price' => $enteredUnitPrice->__toString(),
+            'unit_value' => $unitValue->__toString(),
+            'unit_price_with_igv' => $unitPriceWithIgv->__toString(),
+            'line_base' => $lineBase->__toString(),
+            'igv' => $igv->__toString(),
+            'line_total' => $lineTotal->__toString(),
+        ];
+    }
+
+    /**
+     * @param  array<int, array{quantity: string, total_price: string}>  $items
+     * @return array{subtotal: string, igv: string, total: string, items: array<int, array<string, string>>}
+     */
+    public function calculateDocumentFromTotals(array $items, string $taxMode): array
+    {
+        $subtotal = BigDecimal::zero();
+        $igv = BigDecimal::zero();
+        $total = BigDecimal::zero();
+        $calculatedItems = [];
+
+        foreach ($items as $item) {
+            $calculated = $this->calculateItemFromTotal($item['quantity'], $item['total_price'], $taxMode);
             $subtotal = $subtotal->plus($calculated['line_base']);
             $igv = $igv->plus($calculated['igv']);
             $total = $total->plus($calculated['line_total']);

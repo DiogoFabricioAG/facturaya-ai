@@ -4,6 +4,7 @@ use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\CompanyTokenController;
 use App\Http\Controllers\CreditNoteController;
 use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\FiscalPreviewController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\InvoiceDraftController;
 use App\Http\Resources\CompanyResource;
@@ -33,6 +34,7 @@ Route::middleware('company.auth')->group(function (): void {
     Route::get('/invoice-drafts/{invoiceDraft}', [InvoiceDraftController::class, 'show']);
     Route::put('/invoice-drafts/{invoiceDraft}', [InvoiceDraftController::class, 'update']);
     Route::post('/invoice-drafts/{invoiceDraft}/issue', [InvoiceController::class, 'store']);
+    Route::post('/fiscal-previews', [FiscalPreviewController::class, 'store']);
     Route::get('/invoices/{invoice}/files/{type}', [InvoiceController::class, 'file'])
         ->whereIn('type', ['pdf', 'xml', 'cdr'])
         ->name('api.invoices.file');
