@@ -2,13 +2,18 @@
 
 namespace Tests\Feature;
 
+use App\Contracts\SunatGateway;
 use App\Models\Company;
+use App\Models\CreditNote;
 use App\Models\FiscalOperation;
 use App\Models\FiscalPreview;
 use App\Models\Invoice;
 use App\Models\InvoiceDraft;
 use App\Services\CompanyApiTokenService;
+use App\Support\CanonicalJson;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -24,7 +29,7 @@ class FiscalOperationFlowTest extends TestCase
     {
         parent::setUp();
 
-        \Illuminate\Support\Carbon::setTestNow('2026-10-05 20:00:00');
+        Carbon::setTestNow('2026-10-05 20:00:00');
 
         config()->set('facturaya.ai.driver', 'demo');
         config()->set('facturaya.platform.admin_token', 'platform-admin-secret-token');
@@ -35,7 +40,7 @@ class FiscalOperationFlowTest extends TestCase
 
     protected function tearDown(): void
     {
-        \Illuminate\Support\Carbon::setTestNow();
+        Carbon::setTestNow();
         parent::tearDown();
     }
 
@@ -426,24 +431,30 @@ class FiscalOperationFlowTest extends TestCase
     public function test_crash_post_effect_gateway_preserves_operation_as_unknown_without_rollback(): void
     {
         // Bind a throwing gateway in container
-        $throwingGateway = new class(\Illuminate\Support\Facades\DB::transactionLevel()) implements \App\Contracts\SunatGateway {
+        $throwingGateway = new class(DB::transactionLevel()) implements SunatGateway
+        {
             public int $calls = 0;
+
             public bool $sawPersistedClaimOutsideServiceTransaction = false;
+
             public function __construct(private readonly int $outerTransactionLevel) {}
 
-            public function issue(InvoiceDraft $draft, Invoice $invoice): array {
+            public function issue(InvoiceDraft $draft, Invoice $invoice): array
+            {
                 $this->calls++;
                 $this->sawPersistedClaimOutsideServiceTransaction =
-                    \Illuminate\Support\Facades\DB::transactionLevel() === $this->outerTransactionLevel
+                    DB::transactionLevel() === $this->outerTransactionLevel
                     && FiscalOperation::where('invoice_id', $invoice->id)->where('status', 'processing')->exists();
                 throw new \RuntimeException('Gateway network timeout after sending bytes');
             }
-            public function issueCreditNote(\App\Models\CreditNote $creditNote): array {
+
+            public function issueCreditNote(CreditNote $creditNote): array
+            {
                 throw new \RuntimeException('Gateway network timeout');
             }
         };
 
-        $this->app->instance(\App\Contracts\SunatGateway::class, $throwingGateway);
+        $this->app->instance(SunatGateway::class, $throwingGateway);
 
         $operationId = 'op_crash_1001';
         $idempotencyKey = 'idem_crash_1001';
@@ -613,13 +624,13 @@ class FiscalOperationFlowTest extends TestCase
                 ['description' => 'Item 1', 'quantity' => '1.000', 'unit_value' => '100.00', 'unit_price_with_igv' => '118.00', 'line_base' => '100.00', 'igv' => '18.00', 'line_total' => '118.00'],
             ],
             'totals_json' => ['subtotal' => '100.00', 'igv' => '18.00', 'total' => '118.00'],
-            'preview_digest' => 'sha256:' . str_repeat('a', 64),
+            'preview_digest' => 'sha256:'.str_repeat('a', 64),
             'valid_until' => now()->addMinutes(15),
             'calculation_version' => 1,
             'consumed_at' => now(),
         ]);
 
-        $requestHash = \App\Support\CanonicalJson::digest([
+        $requestHash = CanonicalJson::digest([
             'company_id' => $this->company->id,
             'environment' => 'beta',
             'operation_id' => $operationId,

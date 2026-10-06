@@ -224,8 +224,8 @@ final class CreditNotePdfService
     }
 
     /**
-     * @param array<int, string> $commands
-     * @param array<int, float> $color
+     * @param  array<int, string>  $commands
+     * @param  array<int, float>  $color
      */
     private function text(array &$commands, float $x, float $y, string $text, int $size, string $font, array $color): void
     {
@@ -238,8 +238,8 @@ final class CreditNotePdfService
     }
 
     /**
-     * @param array<int, string> $commands
-     * @param array<int, float> $color
+     * @param  array<int, string>  $commands
+     * @param  array<int, float>  $color
      */
     private function centerText(array &$commands, float $centerX, float $y, string $text, int $size, string $font, array $color): void
     {
@@ -249,8 +249,8 @@ final class CreditNotePdfService
     }
 
     /**
-     * @param array<int, string> $commands
-     * @param array<int, float> $color
+     * @param  array<int, string>  $commands
+     * @param  array<int, float>  $color
      */
     private function rightText(array &$commands, float $rightX, float $y, string $text, int $size, string $font, array $color): void
     {
@@ -260,8 +260,8 @@ final class CreditNotePdfService
     }
 
     /**
-     * @param array<int, string> $commands
-     * @param array<int, float> $color
+     * @param  array<int, string>  $commands
+     * @param  array<int, float>  $color
      */
     private function line(array &$commands, float $x1, float $y1, float $x2, float $y2, array $color, float $width): void
     {
@@ -273,8 +273,8 @@ final class CreditNotePdfService
     }
 
     /**
-     * @param array<int, string> $commands
-     * @param array<int, float> $color
+     * @param  array<int, string>  $commands
+     * @param  array<int, float>  $color
      */
     private function strokeRect(array &$commands, float $x, float $y, float $w, float $h, array $color, float $width): void
     {

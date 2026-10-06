@@ -12,6 +12,7 @@ use App\Models\InvoiceDraft;
 use App\Services\Sunat\SunatGatewayManager;
 use App\Support\CanonicalJson;
 use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -158,13 +159,13 @@ final class FiscalOperationService
             }
 
             try {
-                $confirmedDt = \Illuminate\Support\Carbon::parse($confirmedAt);
+                $confirmedDt = Carbon::parse($confirmedAt);
                 if ($confirmedDt->greaterThan($preview->valid_until)) {
                     $this->fail(409, 'preview_expired');
                 }
             } catch (HttpResponseException $e) {
                 throw $e;
-            } catch (\Throwable) {
+            } catch (Throwable) {
                 $this->fail(422, 'validation_failed');
             }
 
@@ -521,6 +522,7 @@ final class FiscalOperationService
 
                 $resolved = $op->fresh();
                 $this->ensurePdfGenerated($resolved);
+
                 return $this->responseData($resolved->fresh());
             }
         }
@@ -546,6 +548,7 @@ final class FiscalOperationService
 
                 $resolved = $op->fresh();
                 $this->ensurePdfGenerated($resolved);
+
                 return $this->responseData($resolved->fresh());
             }
         }

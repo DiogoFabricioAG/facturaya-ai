@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Company;
 use App\Models\FiscalPreview;
+use App\Models\Invoice;
 use App\Support\CanonicalJson;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
@@ -69,7 +70,7 @@ final class FiscalPreviewService
             $originCorrelativeRaw = trim((string) ($origin['correlative'] ?? ''));
             $originCorrelative = (int) $originCorrelativeRaw;
 
-            $originInvoice = \App\Models\Invoice::query()
+            $originInvoice = Invoice::query()
                 ->where('company_id', $company->id)
                 ->where('series', $originSeries)
                 ->where('correlative', $originCorrelative)
