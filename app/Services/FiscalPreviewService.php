@@ -45,10 +45,6 @@ final class FiscalPreviewService
     {
         $documentType = (string) ($input['document_type'] ?? '');
 
-        if ($documentType === '07') {
-            $this->fail(422, 'unsupported_document_type');
-        }
-
         if ((string) ($input['contract_version'] ?? '') !== self::SUPPORTED_CONTRACT_VERSION) {
             $this->fail(422, 'unsupported_contract_version');
         }
@@ -59,17 +55,6 @@ final class FiscalPreviewService
             $this->fail(500, 'sunat_environment_invalid');
         }
 
-        $taxMode = (string) ($input['tax_mode'] ?? '');
-
-        // Preferencia enviada por el llamador autenticado con el token de la
-        // empresa (la plataforma la verifica antes). No se persiste como
-        // configuración; el acabado fiscal la sincronizará más adelante.
-        if (! in_array($taxMode, ['included', 'excluded'], true)) {
-            throw ValidationException::withMessages([
-                'tax_mode' => 'El modo de IGV no es válido.',
-            ]);
-        }
-
         if ((string) ($input['currency'] ?? '') !== 'PEN') {
             throw ValidationException::withMessages([
                 'currency' => 'La vista previa del piloto solo opera en PEN.',
@@ -77,32 +62,134 @@ final class FiscalPreviewService
         }
 
         $issueDate = (string) ($input['issue_date'] ?? '');
-        $customer = $this->normalizeCustomer($documentType, (array) ($input['customer'] ?? []));
-        $items = $this->normalizeItems((array) ($input['items'] ?? []));
-        $calculated = $this->calculator->calculateDocumentFromTotals($items, $taxMode);
-        $this->assertWireAmounts($calculated);
 
-        $lines = [];
+        if ($documentType === '07') {
+            $origin = (array) ($input['origin'] ?? []);
+            $originSeries = strtoupper(trim((string) ($origin['series'] ?? '')));
+            $originCorrelativeRaw = trim((string) ($origin['correlative'] ?? ''));
+            $originCorrelative = (int) $originCorrelativeRaw;
 
-        foreach ($items as $index => $item) {
-            $lines[] = ['description' => $item['description']] + $calculated['items'][$index];
+            $originInvoice = \App\Models\Invoice::query()
+                ->where('company_id', $company->id)
+                ->where('series', $originSeries)
+                ->where('correlative', $originCorrelative)
+                ->where('status', 'accepted')
+                ->with(['draft.items'])
+                ->first();
+
+            if ($originInvoice === null || $originInvoice->draft === null) {
+                $this->fail(422, 'origin_invoice_not_found');
+            }
+
+            if ((string) $originInvoice->sunat_environment !== $environment) {
+                $this->fail(409, 'sunat_environment_mismatch');
+            }
+
+            $hasActiveCreditNote = $originInvoice->creditNotes()
+                ->whereIn('status', ['processing', 'accepted'])
+                ->exists();
+            if ($hasActiveCreditNote) {
+                $this->fail(409, 'origin_already_has_active_credit_note');
+            }
+
+            $originIssueDate = $originInvoice->draft->issue_date instanceof \DateTimeInterface
+                ? $originInvoice->draft->issue_date->format('Y-m-d')
+                : (string) $originInvoice->draft->issue_date;
+
+            if ($issueDate < $originIssueDate) {
+                $this->fail(422, 'issue_date_before_origin');
+            }
+
+            $taxMode = (string) $originInvoice->draft->tax_mode;
+            $reasonCode = (string) ($input['reason_code'] ?? '01');
+            $reasonDescription = trim((string) ($input['reason_description'] ?? ''));
+            if ($reasonDescription === '') {
+                $reasonDescription = 'Anulación de la operación';
+            }
+
+            $customer = [
+                'document_type' => (string) ($originInvoice->draft->customer_ruc ? '6' : '0'),
+                'name' => (string) $originInvoice->draft->customer_name,
+                'number' => $originInvoice->draft->customer_ruc ?: null,
+            ];
+
+            $items = [];
+            $lines = [];
+            foreach ($originInvoice->draft->items as $item) {
+                $qty = number_format((float) $item->quantity, 3, '.', '');
+                $lineTotal = number_format((float) $item->line_total, 2, '.', '');
+                $items[] = [
+                    'description' => (string) $item->description,
+                    'quantity' => $qty,
+                    'total_price' => $lineTotal,
+                ];
+                $lines[] = [
+                    'description' => (string) $item->description,
+                    'quantity' => $qty,
+                    'line_base' => number_format((float) $item->line_base, 2, '.', ''),
+                    'igv' => number_format((float) $item->igv, 2, '.', ''),
+                    'line_total' => $lineTotal,
+                    'unit_value' => number_format((float) $item->unit_value, 6, '.', ''),
+                    'unit_price_with_igv' => number_format((float) $item->unit_price_with_igv, 6, '.', ''),
+                ];
+            }
+
+            $totals = [
+                'subtotal' => number_format((float) $originInvoice->draft->subtotal, 2, '.', ''),
+                'igv' => number_format((float) $originInvoice->draft->igv, 2, '.', ''),
+                'total' => number_format((float) $originInvoice->draft->total, 2, '.', ''),
+            ];
+
+            $payload = [
+                'contract_version' => self::SUPPORTED_CONTRACT_VERSION,
+                'document_type' => '07',
+                'issue_date' => $issueDate,
+                'currency' => 'PEN',
+                'tax_mode' => $taxMode,
+                'customer' => $customer,
+                'items' => $items,
+                'origin' => [
+                    'series' => $originSeries,
+                    'correlative' => str_pad((string) $originCorrelative, 8, '0', STR_PAD_LEFT),
+                ],
+                'reason_code' => $reasonCode,
+                'reason_description' => $reasonDescription,
+            ];
+        } else {
+            $taxMode = (string) ($input['tax_mode'] ?? '');
+
+            if (! in_array($taxMode, ['included', 'excluded'], true)) {
+                throw ValidationException::withMessages([
+                    'tax_mode' => 'El modo de IGV no es válido.',
+                ]);
+            }
+
+            $customer = $this->normalizeCustomer($documentType, (array) ($input['customer'] ?? []));
+            $items = $this->normalizeItems((array) ($input['items'] ?? []));
+            $calculated = $this->calculator->calculateDocumentFromTotals($items, $taxMode);
+            $this->assertWireAmounts($calculated);
+
+            $lines = [];
+            foreach ($items as $index => $item) {
+                $lines[] = ['description' => $item['description']] + $calculated['items'][$index];
+            }
+
+            $totals = [
+                'subtotal' => $calculated['subtotal'],
+                'igv' => $calculated['igv'],
+                'total' => $calculated['total'],
+            ];
+
+            $payload = [
+                'contract_version' => self::SUPPORTED_CONTRACT_VERSION,
+                'document_type' => $documentType,
+                'issue_date' => $issueDate,
+                'currency' => 'PEN',
+                'tax_mode' => $taxMode,
+                'customer' => $customer,
+                'items' => $items,
+            ];
         }
-
-        $totals = [
-            'subtotal' => $calculated['subtotal'],
-            'igv' => $calculated['igv'],
-            'total' => $calculated['total'],
-        ];
-
-        $payload = [
-            'contract_version' => self::SUPPORTED_CONTRACT_VERSION,
-            'document_type' => $documentType,
-            'issue_date' => $issueDate,
-            'currency' => 'PEN',
-            'tax_mode' => $taxMode,
-            'customer' => $customer,
-            'items' => $items,
-        ];
 
         $operationId = (string) $input['operation_id'];
         $idempotencyKey = (string) $input['idempotency_key'];
@@ -439,6 +526,7 @@ final class FiscalPreviewService
             'preview_valid_until' => $preview->valid_until->utc()->toIso8601String(),
             'previewed_at' => $preview->created_at->utc()->toIso8601String(),
             'calculation_version' => (int) $preview->calculation_version,
+            'origin' => $preview->payload_json['origin'] ?? null,
             'warnings' => [],
         ];
     }

@@ -45,14 +45,26 @@ class StoreFiscalPreviewRequest extends FormRequest
             'actor' => ['prohibited'],
             'actor_id' => ['prohibited'],
             'environment' => ['prohibited'],
-            'customer' => ['required', 'array'],
-            'customer.document_type' => ['required', 'string', 'in:0,1,6'],
-            'customer.name' => ['required', 'string', 'max:255'],
+            'customer' => ['required_if:document_type,01,03', 'nullable', 'array'],
+            'customer.document_type' => ['required_if:document_type,01,03', 'string', 'in:0,1,6'],
+            'customer.name' => ['required_if:document_type,01,03', 'string', 'max:255'],
             'customer.number' => ['nullable', 'string', 'max:20'],
-            'items' => ['required', 'array', 'min:1', 'max:100'],
-            'items.*.description' => ['required', 'string', 'max:500'],
-            'items.*.quantity' => ['required', 'string', 'max:20'],
-            'items.*.total_price' => ['required', 'string', 'max:20'],
+            'items' => ['required_if:document_type,01,03', 'nullable', 'array', 'min:1', 'max:100'],
+            'items.*.description' => ['required_if:document_type,01,03', 'string', 'max:500'],
+            'items.*.quantity' => ['required_if:document_type,01,03', 'string', 'max:20'],
+            'items.*.total_price' => ['required_if:document_type,01,03', 'string', 'max:20'],
+            'origin' => ['required_if:document_type,07', 'nullable', 'array'],
+            'origin.series' => ['required_if:document_type,07', 'string', 'max:4'],
+            'origin.correlative' => [
+                'required_if:document_type,07',
+                function (string $attribute, mixed $value, Closure $fail): void {
+                    if (! is_string($value) && ! is_int($value)) {
+                        $fail('El correlativo de origen debe ser una cadena o un entero.');
+                    }
+                },
+            ],
+            'reason_code' => ['required_if:document_type,07', 'nullable', 'string', 'max:2'],
+            'reason_description' => ['required_if:document_type,07', 'nullable', 'string', 'max:255'],
         ];
     }
 }

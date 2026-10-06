@@ -4,6 +4,7 @@ use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\CompanyTokenController;
 use App\Http\Controllers\CreditNoteController;
 use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\FiscalOperationController;
 use App\Http\Controllers\FiscalPreviewController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\InvoiceDraftController;
@@ -21,6 +22,7 @@ Route::prefix('admin')->middleware('platform.admin')->group(function (): void {
     Route::apiResource('companies', CompanyController::class)->except('destroy');
     Route::post('/companies/{company}/tokens', [CompanyTokenController::class, 'store']);
     Route::delete('/companies/{company}/tokens/{companyApiToken}', [CompanyTokenController::class, 'destroy']);
+    Route::post('/fiscal-operations/{operationId}/declare-not-issued', [FiscalOperationController::class, 'adminDeclareNotIssued']);
 });
 
 Route::middleware('company.auth')->group(function (): void {
@@ -35,6 +37,12 @@ Route::middleware('company.auth')->group(function (): void {
     Route::put('/invoice-drafts/{invoiceDraft}', [InvoiceDraftController::class, 'update']);
     Route::post('/invoice-drafts/{invoiceDraft}/issue', [InvoiceController::class, 'store']);
     Route::post('/fiscal-previews', [FiscalPreviewController::class, 'store']);
+    Route::post('/fiscal-operations/issue', [FiscalOperationController::class, 'issue']);
+    Route::get('/fiscal-operations/{operationId}', [FiscalOperationController::class, 'show']);
+    Route::post('/fiscal-operations/{operationId}/reconcile', [FiscalOperationController::class, 'reconcile']);
+    Route::get('/fiscal-operations/{operationId}/files/{type}', [FiscalOperationController::class, 'file'])
+        ->whereIn('type', ['pdf', 'xml', 'cdr'])
+        ->name('api.fiscal-operations.file');
     Route::get('/invoices/{invoice}/files/{type}', [InvoiceController::class, 'file'])
         ->whereIn('type', ['pdf', 'xml', 'cdr'])
         ->name('api.invoices.file');
