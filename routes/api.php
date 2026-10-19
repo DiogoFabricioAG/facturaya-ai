@@ -1,13 +1,17 @@
 <?php
 
 use App\Http\Controllers\CompanyController;
+use App\Http\Controllers\CompanyProfileController;
 use App\Http\Controllers\CompanyTokenController;
 use App\Http\Controllers\CreditNoteController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\FiscalOperationController;
 use App\Http\Controllers\FiscalPreviewController;
+use App\Http\Controllers\FiscalSetupProbeController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\InvoiceDraftController;
+use App\Http\Middleware\RequireCompanyProfileBridge;
+use App\Http\Middleware\RequireFiscalDiagnosticsBridge;
 use App\Http\Resources\CompanyResource;
 use App\Services\CompanyContext;
 use Illuminate\Support\Facades\Route;
@@ -17,6 +21,15 @@ Route::get('/health', fn () => response()->json([
     'ai_driver' => config('facturaya.ai.driver'),
     'tenancy' => 'company_token',
 ]));
+
+Route::post('/fiscal-setup/probe', [FiscalSetupProbeController::class, 'probe'])
+    ->middleware(RequireFiscalDiagnosticsBridge::class);
+
+Route::prefix('internal')->middleware(RequireCompanyProfileBridge::class)->group(function (): void {
+    Route::get('/company-profile/{company}', [CompanyProfileController::class, 'show']);
+    Route::post('/company-profile/{company}/sync', [CompanyProfileController::class, 'sync']);
+    Route::post('/company-profile/{company}/fiscal-config', [CompanyProfileController::class, 'fiscalConfig']);
+});
 
 Route::prefix('admin')->middleware('platform.admin')->group(function (): void {
     Route::apiResource('companies', CompanyController::class)->except('destroy');
