@@ -6,6 +6,7 @@ use App\Models\Company;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
 use Symfony\Component\Process\Process;
@@ -26,10 +27,7 @@ final class CompanyCertificateStore
 
         $pem = $this->convertPkcs12ToPem($contents, $password);
 
-        $path = 'company-certificates/'.$company->id.'/certificate.pem.enc';
-        Storage::disk('local')->put($path, Crypt::encryptString($pem));
-
-        return $path;
+        return $this->storeValidatedPem($company, $pem);
     }
 
     public function read(Company $company): string
@@ -39,6 +37,79 @@ final class CompanyCertificateStore
         }
 
         return Crypt::decryptString(Storage::disk('local')->get($company->certificate_path));
+    }
+
+    /**
+     * Devuelve el DER del certificado público (parte X.509), nunca la clave
+     * privada ni la frase de paso. Es la fuente del fingerprint del perfil.
+     */
+    public function publicCertificateDer(Company $company): string
+    {
+        return $this->publicCertificateDerFromPem($this->read($company));
+    }
+
+    public function publicCertificateDerFromPem(string $pem): string
+    {
+        $certificate = @openssl_x509_read($pem);
+
+        if ($certificate === false) {
+            $this->clearOpenSslErrors();
+
+            throw new RuntimeException('certificate_public_part_unavailable');
+        }
+
+        $exported = '';
+
+        if (! @openssl_x509_export($certificate, $exported)) {
+            $this->clearOpenSslErrors();
+
+            throw new RuntimeException('certificate_export_failed');
+        }
+
+        $payload = preg_replace('/-----(?:BEGIN|END) CERTIFICATE-----|\s+/', '', (string) $exported);
+        $der = base64_decode((string) $payload, true);
+
+        if (! is_string($der) || $der === '') {
+            throw new RuntimeException('certificate_der_unavailable');
+        }
+
+        return $der;
+    }
+
+    /**
+     * Valida y convierte un PKCS#12 a PEM sin persistir nada; lanza
+     * `ValidationException` con códigos/mensajes fijos si es inválido.
+     */
+    public function validatedPemFromPkcs12(string $contents, #[\SensitiveParameter] string $password): string
+    {
+        return $this->convertPkcs12ToPem($contents, $password);
+    }
+
+    /**
+     * Persiste un PEM ya validado en una ruta nueva (sin reutilizar el archivo
+     * vigente) y devuelve la ruta cifrada.
+     */
+    public function storeValidatedPem(Company $company, #[\SensitiveParameter] string $pem): string
+    {
+        $path = 'company-certificates/'.$company->id.'/certificate-'.strtolower((string) Str::ulid()).'.pem.enc';
+
+        Storage::disk('local')->put($path, Crypt::encryptString($pem));
+
+        return $path;
+    }
+
+    /**
+     * Elimina únicamente un archivo recién escrito y descartable. Nunca debe
+     * usarse con la ruta activa vigente; las rutas fuera del prefijo se
+     * ignoran.
+     */
+    public function discard(string $path): void
+    {
+        if (! str_starts_with($path, 'company-certificates/')) {
+            return;
+        }
+
+        Storage::disk('local')->delete($path);
     }
 
     private function convertPkcs12ToPem(string $contents, #[\SensitiveParameter] string $password): string
