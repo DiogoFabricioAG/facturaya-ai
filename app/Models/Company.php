@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Storage;
 
 class Company extends Model
@@ -25,7 +26,20 @@ class Company extends Model
             'sol_user' => 'encrypted',
             'sol_password' => 'encrypted',
             'active' => 'boolean',
+            'profile_version' => 'integer',
+            'fiscal_revision' => 'integer',
+            'profile_updated_at' => 'datetime',
         ];
+    }
+
+    public function profileBinding(): HasOne
+    {
+        return $this->hasOne(CompanyProfileBinding::class);
+    }
+
+    public function profileVersions(): HasMany
+    {
+        return $this->hasMany(CompanyProfileVersion::class);
     }
 
     public function apiTokens(): HasMany
