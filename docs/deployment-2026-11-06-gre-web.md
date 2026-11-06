@@ -54,3 +54,11 @@ El rollback restaura imágenes y fuente del host; no hay esquema que revertir y 
 - Con guardas transaccionales (guía `unknown`, número 1, sin ticket, próximo número 2, ninguna otra guía numerada), la guía `01m6sc9mh8yv926nk4v0sct838` pasó a `send_failed`, código `SOL_SIN_REGISTRO`, sin correlativo y conservando su XML. El próximo número T001 de producción volvió a 1.
 - La siguiente guía emitida será T001-1. Estado anterior y posterior: `t001-1-before.json` y `t001-1-after.json` en el directorio del release.
 - Si SUNAT rechazara la nueva T001-1 como ya registrada, el envío queda `unknown` con ese mensaje y no se reenvía.
+
+## Seguimiento 06/11/2026 23:12 UTC: causa del rechazo y segunda liberación
+
+- El primer envío con la versión nueva (guía `01m6sgmvzdxaf1xv4hss1k6a05`, 22:46 UTC) quedó `send_failed` con `HTTP_401` en la fase de envío: SUNAT entregaba token, pero `/v1/contribuyente/gem` respondía `{"status":401,"message":"Unauthorized"}` a cualquier llamada.
+- Causa: el usuario SOL secundario configurado no tenía las opciones de Guía de Remisión Electrónica. El operador se las asignó alrededor de las 22:50 UTC y SUNAT empezó a aceptarlas recién a las 23:11 UTC. La credencial API existente (alcance Web) no fue la causa: funciona tras el cambio.
+- Se descartaron reloj (esperas de hasta 45 s), red (Francia y Perú), estado del RUC (activo y habido) y host. Herramienta usada: `deploy/gre-access-check.sh`, de solo lectura (ticket inexistente y envío vacío; ahora responden 422 de validación).
+- Con las mismas guardas, esa guía quedó sin correlativo (sigue `send_failed`, con XML) y el próximo número T001 volvió a 1. Estado: `t001-1-b-before.json` y `t001-1-b-after.json`.
+- Mejora pendiente: ante 401/403 el mensaje dice "corrige el dato", cuando el problema es de permisos en SUNAT y no de la guía.
