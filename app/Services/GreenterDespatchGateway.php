@@ -20,11 +20,17 @@ use Greenter\Model\Despatch\Driver;
 use Greenter\Model\Despatch\Shipment;
 use Greenter\Model\Despatch\Vehicle;
 use Greenter\Sunat\GRE\Api\AuthApi;
+use Greenter\Sunat\GRE\Api\CpeApiInterface;
+use Greenter\Sunat\GRE\ApiException;
 use Greenter\Sunat\GRE\Configuration;
+use Greenter\Sunat\GRE\Model\CpeDocument;
+use Greenter\Sunat\GRE\Model\CpeDocumentArchivo;
 use Greenter\Xml\Builder\DespatchBuilder;
 use Greenter\XMLSecLibs\Sunat\SignedXml;
+use Greenter\Zip\ZipFly;
 use GuzzleHttp\Client as HttpClient;
 use RuntimeException;
+use Throwable;
 
 class GreenterDespatchGateway
 {
@@ -80,17 +86,73 @@ class GreenterDespatchGateway
         return $signer->signXml($xml);
     }
 
+    /**
+     * @throws GreSendException when SUNAT returns no ticket; it carries SUNAT's code and message.
+     */
     public function send(StoredCompany $company, StoredDespatch $guide, string $xml): string
     {
         if ($guide->driver === 'fake') {
             return 'demo-'.$guide->id;
         }
-        $result = $this->api($company)->sendXml($company->ruc.'-09-'.$guide->series.'-'.$guide->correlative, $xml);
-        if (! $result?->isSuccess() || ! method_exists($result, 'getTicket') || ! $result->getTicket()) {
-            throw new RuntimeException('gre_send_result_unconfirmed');
+        $name = $company->ruc.'-09-'.$guide->series.'-'.$guide->correlative;
+        try {
+            $api = $this->cpe($company);
+        } catch (ApiException $error) {
+            // The token request failed: SUNAT never received the guide.
+            [$code, $message] = self::sunatError($error);
+            throw new GreSendException(true, $code, $message, 'auth');
+        } catch (Throwable) {
+            throw new GreSendException(true, 'AUTH', 'No se obtuvo autorización de SUNAT para enviar guías.', 'auth');
+        }
+        $zip = (new ZipFly)->compress($name.'.xml', $xml);
+        $document = (new CpeDocument)->setArchivo((new CpeDocumentArchivo)->setNomArchivo($name.'.zip')
+            ->setArcGreZip(base64_encode($zip))->setHashZip(hash('sha256', $zip)));
+        try {
+            $ticket = $api->enviarCpe($name, $document)->getNumTicket();
+        } catch (ApiException $error) {
+            [$code, $message] = self::sunatError($error);
+            $status = $error->getCode();
+            // 4xx: SUNAT refused the request and did not register it. 5xx or no response: outcome unknown.
+            // "Already registered" means a previous submission exists, so it is never treated as not sent.
+            $definitive = $status >= 400 && $status < 500 && ! preg_match('/registrad|ya existe|duplicad/iu', $message);
+            throw new GreSendException($definitive, $code, $message, 'send');
+        }
+        if (! is_string($ticket) || $ticket === '') {
+            throw new GreSendException(false, 'NO_TICKET', 'SUNAT no devolvió número de ticket.', 'send');
         }
 
-        return $result->getTicket();
+        return $ticket;
+    }
+
+    /**
+     * SUNAT's error code and message from a GRE API failure, without anything resembling a credential.
+     *
+     * @return array{0: string, 1: string}
+     */
+    public static function sunatError(ApiException $error): array
+    {
+        $body = $error->getResponseBody();
+        $data = is_string($body) ? json_decode($body, true) : json_decode((string) json_encode($body), true);
+        $data = is_array($data) ? $data : [];
+        $first = is_array($data['errors'] ?? null) && is_array($data['errors'][0] ?? null) ? $data['errors'][0] : null;
+        [$code, $message] = match (true) {
+            $first !== null => [$first['cod'] ?? null, $first['msg'] ?? null],
+            isset($data['cod']) => [$data['cod'], $data['msg'] ?? null],
+            isset($data['error']) => [$data['error'], $data['error_description'] ?? null],
+            default => [null, null],
+        };
+        $fallback = $error->getCode() > 0 ? 'HTTP_'.$error->getCode() : 'SIN_RESPUESTA';
+
+        return [self::safe(is_scalar($code) ? (string) $code : '', 20) ?: $fallback,
+            self::safe(is_scalar($message) ? (string) $message : '', 300) ?: 'SUNAT no dio detalle del error.'];
+    }
+
+    private static function safe(string $value, int $max): string
+    {
+        $value = preg_replace('/[\x00-\x1F\x7F]+/u', ' ', $value) ?? '';
+        $value = preg_replace('/[A-Za-z0-9._~+\/=-]{32,}/', '[…]', $value) ?? '';
+
+        return mb_substr(trim($value), 0, $max);
     }
 
     public function status(StoredCompany $company, StoredDespatch $guide): array
@@ -115,16 +177,28 @@ class GreenterDespatchGateway
 
     protected function api(StoredCompany $company): Api
     {
+        return (new Api(null, $this->factory($company)))->setApiCredentials($company->gre_client_id, $company->gre_client_secret)
+            ->setClaveSOL($company->ruc, $company->sol_user, $company->sol_password);
+    }
+
+    /** Authenticated GRE API client; the token request happens here, before any document is sent. */
+    protected function cpe(StoredCompany $company): CpeApiInterface
+    {
+        // Same credential format as Api::setClaveSOL: RUC followed by the SOL user.
+        return $this->factory($company)->create($company->gre_client_id, $company->gre_client_secret,
+            $company->ruc.$company->sol_user, $company->sol_password);
+    }
+
+    private function factory(StoredCompany $company): ApiFactory
+    {
         // Fixed official endpoints, bounded requests, no redirects or fallback from beta to production.
         if ($company->sunat_environment !== 'production' || ! $company->gre_enabled || ! $company->hasSunatCredentials()
             || ! $company->gre_client_id || ! $company->gre_client_secret) {
             throw new RuntimeException('gre_not_configured');
         }
         $client = new HttpClient(['timeout' => 30, 'connect_timeout' => 5, 'allow_redirects' => false]);
-        $factory = new ApiFactory(new AuthApi($client, (new Configuration)->setHost('https://api-seguridad.sunat.gob.pe/v1')),
-            $client, new InMemoryStore, 'https://api-cpe.sunat.gob.pe/v1');
 
-        return (new Api(null, $factory))->setApiCredentials($company->gre_client_id, $company->gre_client_secret)
-            ->setClaveSOL($company->ruc, $company->sol_user, $company->sol_password);
+        return new ApiFactory(new AuthApi($client, (new Configuration)->setHost('https://api-seguridad.sunat.gob.pe/v1')),
+            $client, new InMemoryStore, 'https://api-cpe.sunat.gob.pe/v1');
     }
 }

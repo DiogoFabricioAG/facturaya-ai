@@ -572,3 +572,39 @@ footer { min-height: 74px; display: flex; align-items: center; justify-content: 
 }
 
 [hidden] { display: none !important; }
+
+/* Guías de remisión */
+.gre-recipient { margin-top: 16px; }
+.gre-transport { min-width: 0; margin: 22px 0 0; padding: 0; border: 0; }
+.gre-transport legend { margin-bottom: 14px; font-size: 12px; font-weight: 800; }
+.gre-weight { max-width: 260px; }
+.gre-items { min-width: 520px; }
+.gre-items th:first-child { width: 56%; }
+.gre-items th:nth-child(2) { width: 16%; }
+.gre-items th:nth-child(3) { width: 22%; }
+.gre-items th:nth-child(4) { width: 6%; }
+.gre-items-readonly th:first-child { width: 60%; }
+.gre-items-readonly th:nth-child(3) { width: 24%; }
+.gre-unit { border-color: #d7dde7; background: white; padding: 0 6px; text-align: left; font-size: 11px; }
+.gre-item-actions { display: flex; justify-content: space-between; gap: 16px; }
+.gre-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin: 18px 0 0; border: 1px solid var(--line); background: var(--line); }
+.gre-summary > div { padding: 11px 13px; background: white; }
+.gre-summary .is-wide { grid-column: span 2; }
+.gre-summary dt { color: var(--muted); font: 600 8px 'IBM Plex Mono', monospace; text-transform: uppercase; letter-spacing: .07em; }
+.gre-summary dd { margin: 5px 0 0; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+.gre-message { margin: 18px 0 0; padding: 12px 14px; border-left: 3px solid var(--cobalt); background: #e9eeff; color: #263b8b; font-size: 12px; line-height: 1.5; }
+.gre-message.is-error { border-color: var(--coral); background: #fff0ed; color: #913126; }
+.gre-message.is-success { border-color: #28a977; background: #e4faf1; color: #176a51; }
+.gre-confirm { margin-top: 22px; }
+.gre-confirm-check { display: flex; align-items: flex-start; gap: 10px; font-size: 12px; line-height: 1.5; cursor: pointer; }
+.gre-confirm-check input { width: 16px; height: 16px; margin-top: 2px; accent-color: var(--cobalt); }
+.gre-confirm .primary-button { margin-top: 16px; }
+.gre-edit-hint { margin: 14px 0 0; color: var(--muted); font-size: 11px; }
+.gre-followup { flex-wrap: wrap; margin-top: 18px; }
+.recent-table .gre-row-message { max-width: 280px; margin-top: 6px; white-space: normal; }
+
+@media (max-width: 620px) {
+    .gre-summary { grid-template-columns: 1fr; }
+    .gre-summary .is-wide { grid-column: auto; }
+    .gre-weight { max-width: none; }
+}

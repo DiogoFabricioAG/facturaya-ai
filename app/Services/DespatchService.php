@@ -76,6 +76,16 @@ final class DespatchService
             $sent = true;
             $ticket = $this->gateway->send($company, $guide, $xml);
             $guide->update(['ticket' => $ticket, 'status' => 'pending', 'message' => 'Envío registrado. Falta consultar la aceptación.']);
+        } catch (GreSendException $error) {
+            // SUNAT's code and message are business data already sanitized by the gateway; never the raw exception.
+            Log::warning($error->definitive ? 'gre_issue_rejected' : 'gre_issue_unconfirmed', ['guide_id' => $guide->id,
+                'phase' => $error->stage, 'sunat_code' => $error->sunatCode, 'sunat_message' => $error->sunatMessage]);
+            $reason = $error->sunatCode.': '.$error->sunatMessage;
+            $guide->update($error->definitive
+                ? ['status' => 'send_failed', 'response_code' => $error->sunatCode,
+                    'message' => mb_substr('SUNAT no recibió la guía ('.$reason.'). No quedó registrada: corrige el dato y prepara una nueva guía.', 0, 500)]
+                : ['status' => 'unknown', 'response_code' => $error->sunatCode,
+                    'message' => mb_substr('No pudimos confirmar el envío ('.$reason.'). No vuelvas a emitir esta guía; requiere revisión.', 0, 500)]);
         } catch (Throwable $error) {
             // Never log raw transport exceptions: API errors can contain credentials or tokens.
             Log::warning('gre_issue_unconfirmed', ['guide_id' => $guide->id, 'phase' => $sent ? 'send' : 'prepare', 'error_type' => $error::class]);

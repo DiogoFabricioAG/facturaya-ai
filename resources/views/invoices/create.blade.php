@@ -40,6 +40,7 @@
             <a class="brand" href="/" aria-label="FacturaYa AI, inicio"><span class="brand-mark" aria-hidden="true">F</span><span>FacturaYa <em>AI</em></span></a>
             <nav class="product-nav" aria-label="Navegación principal">
                 <a class="is-active" href="/">Emitir comprobante</a>
+                <a href="/guias">Guías de remisión</a>
                 <a href="/platform">Empresas</a>
             </nav>
             <button id="company-switcher" class="company-switcher" type="button" title="Cambiar de empresa">

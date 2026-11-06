@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Despatch;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 /** First scope: remitente, sale, private transport, one principal vehicle and DNI driver. */
 class StoreDespatchRequest extends FormRequest
@@ -43,7 +45,7 @@ class StoreDespatchRequest extends FormRequest
             'items.*' => ['required', 'array:description,quantity,unit'],
             'items.*.description' => ['required', 'string', 'max:500'],
             'items.*.quantity' => $decimal,
-            'items.*.unit' => ['required', 'in:NIU,KGM,MTR,LTR'],
+            'items.*.unit' => ['required', Rule::in(array_keys(Despatch::UNITS))],
             'company_id' => ['prohibited'],
             'environment' => ['prohibited'],
             'transport_mode' => ['prohibited'],

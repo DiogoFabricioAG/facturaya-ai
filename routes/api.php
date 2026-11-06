@@ -41,6 +41,7 @@ Route::prefix('admin')->middleware('platform.admin')->group(function (): void {
 });
 
 Route::middleware('company.auth')->group(function (): void {
+    Route::get('/despatch-invoices', [DespatchController::class, 'invoices']);
     Route::get('/despatches', [DespatchController::class, 'index']);
     Route::post('/despatches', [DespatchController::class, 'store']);
     Route::get('/despatches/{despatch}', [DespatchController::class, 'show']);

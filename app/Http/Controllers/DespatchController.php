@@ -5,10 +5,12 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreDespatchRequest;
 use App\Models\Company;
 use App\Models\Despatch;
+use App\Models\Invoice;
 use App\Models\InvoiceSequence;
 use App\Services\CompanyContext;
 use App\Services\DespatchService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
@@ -41,7 +43,32 @@ class DespatchController extends Controller
 
     public function index(CompanyContext $context)
     {
-        return response()->json(Despatch::where('company_id', $context->company()->id)->latest()->paginate(20));
+        return response()->json(Despatch::where('company_id', $context->company()->id)->with('invoice.draft')->latest()->paginate(20)
+            ->through(fn (Despatch $guide): array => $this->present($guide)));
+    }
+
+    /** Accepted invoices with an RUC customer in the company's current environment: the only ones a guide can reference. */
+    public function invoices(CompanyContext $context)
+    {
+        $company = $context->company();
+        $invoices = Invoice::where('company_id', $company->id)->where('status', 'accepted')->where('document_type', '01')
+            ->where('sunat_environment', $company->sunat_environment)
+            ->whereHas('draft', fn ($query) => $query->where('customer_document_type', '6'))
+            ->with('draft.items')->latest()->limit(100)->get();
+        $guides = Despatch::where('company_id', $company->id)->whereIn('invoice_id', $invoices->pluck('id'))->oldest()
+            ->get(['invoice_id', 'series', 'correlative', 'status'])->groupBy('invoice_id');
+        $quantity = static fn (string $value): string => str_contains($value, '.') ? rtrim(rtrim($value, '0'), '.') : $value;
+
+        return response()->json(['data' => $invoices->map(fn (Invoice $invoice): array => [
+            'id' => $invoice->id,
+            'number' => $invoice->number,
+            'issue_date' => $invoice->draft->issue_date?->format('Y-m-d'),
+            'customer' => ['ruc' => $invoice->draft->customer_ruc, 'name' => $invoice->draft->customer_name],
+            'items' => $invoice->draft->items->map(fn ($item): array => ['description' => $item->description,
+                'quantity' => $quantity((string) $item->quantity)])->values(),
+            'guides' => ($guides[$invoice->id] ?? collect())->map(fn (Despatch $guide): array => [
+                'number' => $guide->correlative ? $guide->series.'-'.$guide->correlative : null, 'status' => $guide->status])->values(),
+        ])->values()]);
     }
 
     public function store(StoreDespatchRequest $request, CompanyContext $context, DespatchService $service)
@@ -82,7 +109,16 @@ class DespatchController extends Controller
 
     private function response(Despatch $guide, int $status = 200)
     {
-        return response()->json(['data' => [...$guide->toArray(), 'is_demo' => $guide->driver === 'fake',
-            'document_type' => '09', 'reason_code' => '01', 'transport_mode' => '02']], $status);
+        return response()->json(['data' => $this->present($guide->loadMissing('invoice.draft'))], $status);
+    }
+
+    private function present(Despatch $guide): array
+    {
+        $invoice = $guide->invoice;
+
+        return [...Arr::except($guide->toArray(), ['invoice']), 'is_demo' => $guide->driver === 'fake',
+            'document_type' => '09', 'reason_code' => '01', 'transport_mode' => '02',
+            'invoice_number' => $invoice?->number,
+            'customer' => $invoice?->draft ? ['ruc' => $invoice->draft->customer_ruc, 'name' => $invoice->draft->customer_name] : null];
     }
 }
