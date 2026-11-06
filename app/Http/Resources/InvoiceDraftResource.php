@@ -32,6 +32,9 @@ class InvoiceDraftResource extends JsonResource
             'issue_date' => $this->issue_date?->format('Y-m-d'),
             'tax_mode' => $this->tax_mode,
             'currency' => $this->currency,
+            'payment_method' => $this->payment_method ?? 'contado',
+            'outstanding_amount' => $this->outstanding_amount,
+            'installments' => $this->installments ?? [],
             'source' => [
                 'type' => match ($this->mime_type) {
                     'text/plain' => 'text',

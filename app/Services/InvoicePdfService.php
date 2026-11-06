@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\Invoice;
-use Illuminate\Support\Facades\Storage;
 
 /**
  * Builds the human-friendly representation of an issued electronic document.
@@ -18,21 +17,11 @@ final class InvoicePdfService
 
     private const PAGE_HEIGHT = 842;
 
-    private const NAVY = [0.10, 0.12, 0.16];
+    private const BLACK = [0.0, 0.0, 0.0];
 
-    private const BLUE = [0.22, 0.26, 0.32];
+    private const GRAY = [0.35, 0.35, 0.35];
 
-    private const TEAL = [0.62, 0.64, 0.68];
-
-    private const MUTED = [0.38, 0.40, 0.44];
-
-    private const LINE = [0.86, 0.89, 0.93];
-
-    private const SURFACE = [0.96, 0.97, 0.99];
-
-    private const PALE_GREEN = [0.95, 0.95, 0.95];
-
-    private const PALE_AMBER = [0.95, 0.95, 0.95];
+    private const LINE = [0.65, 0.65, 0.65];
 
     public function render(Invoice $invoice): string
     {
@@ -40,32 +29,30 @@ final class InvoicePdfService
 
         $company = $invoice->company;
         $draft = $invoice->draft;
-        $digest = $this->extractDigest($invoice);
-        $documentType = (string) ($invoice->document_type ?: $draft->document_type ?: '01');
+        $documentType = (string) ($invoice->document_type ?? $draft->document_type ?? '01');
         $customerDocumentType = $draft->customer_document_type !== null
             ? (string) $draft->customer_document_type
             : ($documentType === '03' ? '0' : '6');
         $anonymousCustomer = $documentType === '03' && $customerDocumentType === '0';
-
         $data = [
             'number' => $invoice->number,
-            'document_type' => (string) ($invoice->document_type ?: $draft->document_type ?: '01'),
-            'document_name' => ($invoice->document_type ?: $draft->document_type ?: '01') === '03'
-                ? 'BOLETA DE VENTA ELECTRONICA'
+            'document_type' => $documentType,
+            'document_name' => $documentType === '03'
+                ? 'BOLETA ELECTRONICA'
                 : 'FACTURA ELECTRONICA',
             'series' => (string) $invoice->series,
             'status' => (string) $invoice->status,
-            'sunat_code' => $invoice->sunat_code !== null ? (string) $invoice->sunat_code : null,
-            'sunat_message' => trim((string) $invoice->sunat_message),
-            'digest' => $digest,
             'company_name' => trim((string) $company->legal_name) ?: 'Empresa emisora',
             'company_ruc' => (string) $company->ruc,
             'company_address' => $this->address($company),
-            'customer_name' => $anonymousCustomer ? 'Consumidor final' : (trim((string) $draft->customer_name) ?: 'Cliente'),
+            'customer_name' => trim((string) $draft->customer_name) ?: ($anonymousCustomer ? 'Consumidor final' : 'Cliente'),
             'customer_ruc' => $anonymousCustomer ? 'No consignado' : (string) $draft->customer_ruc,
             'customer_document_label' => $anonymousCustomer ? 'SIN DOCUMENTO' : ($customerDocumentType === '1' ? 'DNI' : 'RUC'),
-            'issue_date' => optional($draft->issue_date)->format('d/m/Y') ?: '—',
+            'issue_date' => optional($draft->issue_date)->format('d/m/Y') ?: '-',
             'currency' => (string) ($draft->currency ?: 'PEN'),
+            'currency_label' => ($draft->currency ?: 'PEN') === 'PEN' ? 'SOLES' : (string) ($draft->currency ?: 'PEN'),
+            'payment_method' => $draft->payment_method ?? 'contado',
+            'payment_lines' => InvoicePaymentTerms::summary($draft),
             'subtotal' => $this->money($draft->subtotal),
             'igv' => $this->money($draft->igv),
             'total' => $this->money($draft->total),
@@ -87,7 +74,7 @@ final class InvoicePdfService
 
     private function address(object $company): string
     {
-        return trim(implode(' · ', array_filter([
+        return trim(implode(', ', array_filter([
             $company->address,
             $company->district,
             $company->province,
@@ -95,51 +82,46 @@ final class InvoicePdfService
         ], static fn ($value): bool => trim((string) $value) !== '')));
     }
 
-    private function extractDigest(Invoice $invoice): ?string
-    {
-        if (! $invoice->xml_path || ! Storage::disk('local')->exists($invoice->xml_path)) {
-            return null;
-        }
-
-        $xml = Storage::disk('local')->get($invoice->xml_path);
-
-        if (preg_match('~<(?:(?:[A-Za-z0-9_]+):)?DigestValue>([^<]+)</~i', $xml, $matches) !== 1) {
-            return null;
-        }
-
-        return trim($matches[1]);
-    }
-
     /** @param array<string, mixed> $data */
     private function makePdf(array $data): string
     {
-        // Ten rows per page leaves enough room for the totals and validation panel.
+        // Keep the representation compact and readable while allowing long item lists to paginate.
         $chunks = array_chunk($data['items'], 10);
         $chunks = $chunks === [] ? [[]] : $chunks;
         $pages = [];
+        $credit = ($data['payment_method'] ?? 'contado') === 'credito';
+        $pageCount = count($chunks) + ($credit ? 1 : 0);
 
         foreach ($chunks as $index => $items) {
             $commands = [];
             $lastPage = $index === count($chunks) - 1;
-            $this->drawPageBackground($commands);
             $tableTop = $this->drawHeader($commands, $data, $index === 0);
             $cursor = $this->drawItemsTable($commands, $items, $tableTop);
 
             if ($lastPage) {
-                $this->drawTotalsAndValidation($commands, $data, $cursor);
+                $this->drawTotals($commands, $data, $cursor);
             } else {
-                $this->text($commands, 42, 74, 'Continua en la siguiente pagina', 8, '/F1', self::MUTED);
+                $this->text($commands, 42, 74, 'Continua en la siguiente pagina', 8, '/F1', self::GRAY);
             }
 
-            $this->drawFooter($commands, $index + 1, count($chunks));
+            $this->drawFooter($commands, $index + 1, $pageCount);
+            $pages[] = implode("\n", $commands);
+        }
+        if ($credit) {
+            $commands = [];
+            $this->text($commands, 42, 790, 'CONDICIONES DE PAGO - '.$data['number'], 12, '/F2', self::BLACK);
+            foreach ($data['payment_lines'] as $index => $line) {
+                $this->text($commands, 42, 755 - ($index * 24), $line, 10, '/F1', self::BLACK);
+            }
+            $this->drawFooter($commands, $pageCount, $pageCount);
             $pages[] = implode("\n", $commands);
         }
 
         $objects = [
             1 => '<< /Type /Catalog /Pages 2 0 R >>',
             2 => '',
-            3 => '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
-            4 => '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>',
+            3 => '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
+            4 => '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>',
         ];
         $pageReferences = [];
 
@@ -180,145 +162,107 @@ final class InvoicePdfService
         return $pdf;
     }
 
-    /** @param array<int, string> $commands */
-    private function drawPageBackground(array &$commands): void
-    {
-        $this->fillRect($commands, 0, 0, self::PAGE_WIDTH, self::PAGE_HEIGHT, [1.0, 1.0, 1.0]);
-        $this->fillRect($commands, 0, 830, self::PAGE_WIDTH, 12, self::BLUE);
-        $this->fillRect($commands, 0, 818, self::PAGE_WIDTH, 1, self::TEAL);
-    }
-
     /** @param array<int, string> $commands @param array<string, mixed> $data */
     private function drawHeader(array &$commands, array $data, bool $firstPage): int
     {
-        // Brand mark: a restrained two-tone signature rather than a generic logo box.
-        $this->fillRect($commands, 42, 781, 8, 26, self::BLUE);
-        $this->fillRect($commands, 50, 789, 8, 18, self::TEAL);
-        $this->text($commands, 66, 801, 'FACTURAYA', 11, '/F2', self::NAVY);
-        $this->text($commands, 66, 787, 'EMISION ELECTRONICA', 7, '/F1', self::MUTED);
+        if (! $firstPage) {
+            $this->text($commands, 42, 790, 'DETALLE DEL COMPROBANTE - CONTINUACION', 9, '/F2', self::BLACK);
 
-        $this->rightText($commands, 553, 801, $data['document_name'], 9, '/F2', self::MUTED);
-        $this->rightText($commands, 553, 779, (string) $data['number'], 16, '/F2', self::NAVY);
-
-        // Issuer panel.
-        $this->strokeRect($commands, 42, 664, 511, 90, self::LINE, 0.8);
-        $this->text($commands, 58, 733, 'EMISOR', 7, '/F2', self::BLUE);
-        $this->text($commands, 58, 713, $this->shortText($data['company_name'], 48), 12, '/F2', self::NAVY);
-        $this->text($commands, 58, 696, 'RUC '.$data['company_ruc'], 9, '/F1', self::MUTED);
-        $this->text($commands, 58, 680, $this->shortText($data['company_address'] ?: 'Domicilio fiscal no registrado', 78), 8, '/F1', self::MUTED);
-        $this->rightText($commands, 537, 713, 'DOCUMENTO ELECTRONICO', 7, '/F2', self::MUTED);
-        $this->rightText($commands, 537, 696, 'Serie '.$data['series'], 8, '/F1', self::MUTED);
-
-        // On later pages the customer context is compact, avoiding a large empty repeat.
-        if ($firstPage) {
-            $this->fillRect($commands, 42, 580, 511, 68, self::SURFACE);
-            $this->fillRect($commands, 42, 580, 5, 68, self::TEAL);
-            $this->text($commands, 58, 630, 'CLIENTE', 7, '/F2', self::BLUE);
-            $this->text($commands, 58, 610, $this->shortText($data['customer_name'], 42), 11, '/F2', self::NAVY);
-            $this->text($commands, 58, 594, $data['customer_document_label'].' '.$data['customer_ruc'], 9, '/F1', self::MUTED);
-            $this->line($commands, 344, 590, 344, 638, self::LINE, 0.8);
-            $this->text($commands, 367, 630, 'FECHA DE EMISION', 7, '/F2', self::MUTED);
-            $this->text($commands, 367, 610, (string) $data['issue_date'], 10, '/F2', self::NAVY);
-            $this->text($commands, 470, 630, 'MONEDA', 7, '/F2', self::MUTED);
-            $this->text($commands, 470, 610, (string) $data['currency'], 10, '/F2', self::NAVY);
-
-            return 555;
+            return 760;
         }
 
-        $this->text($commands, 42, 636, 'DETALLE DEL COMPROBANTE · CONTINUACION', 8, '/F2', self::MUTED);
+        $this->centerText($commands, self::PAGE_WIDTH / 2, 803, 'COMPROBANTE ELECTRONICO', 16, '/F2', self::BLACK);
+        $this->line($commands, 42, 792, 553, 792, self::BLACK, 0.8);
 
-        return 620;
+        $this->text($commands, 42, 770, 'DATOS DEL COMPROBANTE:', 9, '/F2', self::BLACK);
+        $this->text($commands, 50, 750, 'TIPO DE COMPROBANTE: '.$data['document_name'], 9, '/F1', self::BLACK);
+        $this->text($commands, 305, 750, 'NUMERO: '.$data['number'], 9, '/F1', self::BLACK);
+        $this->text($commands, 50, 733, 'FECHA DE EMISION: '.$data['issue_date'], 9, '/F1', self::BLACK);
+        $this->text($commands, 305, 733, 'MONEDA: '.$data['currency_label'], 9, '/F1', self::BLACK);
+
+        $this->text($commands, 42, 705, 'DATOS DEL EMISOR:', 9, '/F2', self::BLACK);
+        $this->text($commands, 50, 686, 'RUC: '.$data['company_ruc'], 9, '/F1', self::BLACK);
+        $this->text($commands, 50, 669, 'RAZON SOCIAL: '.$this->shortText($data['company_name'], 86), 9, '/F1', self::BLACK);
+        $this->text($commands, 50, 652, 'DOMICILIO FISCAL: '.$this->shortText($data['company_address'] ?: 'No registrado', 82), 9, '/F1', self::BLACK);
+
+        $this->text($commands, 42, 624, 'DATOS DEL CLIENTE:', 9, '/F2', self::BLACK);
+        $this->text($commands, 50, 605, 'TIPO DE DOCUMENTO: '.$data['customer_document_label'], 9, '/F1', self::BLACK);
+        $this->text($commands, 305, 605, 'NUMERO: '.$data['customer_ruc'], 9, '/F1', self::BLACK);
+        $this->text($commands, 50, 588, 'NOMBRE / RAZON SOCIAL: '.$this->shortText($data['customer_name'], 74), 9, '/F1', self::BLACK);
+
+        $this->text($commands, 42, 559, 'DETALLE:', 9, '/F2', self::BLACK);
+        $this->text($commands, 50, 575, ($data['payment_lines'][0] ?? 'FORMA DE PAGO: CONTADO').(($data['payment_method'] ?? '') === 'credito' ? ' - Ver condiciones al final' : ''), 8, '/F1', self::BLACK);
+
+        return 542;
     }
 
     /** @param array<int, string> $commands @param array<int, array<string, string>> $items */
     private function drawItemsTable(array &$commands, array $items, int $top): int
     {
-        $this->fillRect($commands, 42, $top - 28, 511, 28, self::NAVY);
-        $this->text($commands, 56, $top - 18, 'DESCRIPCION', 7, '/F2', [1.0, 1.0, 1.0]);
-        $this->rightText($commands, 356, $top - 18, 'CANT.', 7, '/F2', [1.0, 1.0, 1.0]);
-        $this->rightText($commands, 451, $top - 18, 'P. UNIT.', 7, '/F2', [1.0, 1.0, 1.0]);
-        $this->rightText($commands, 540, $top - 18, 'TOTAL', 7, '/F2', [1.0, 1.0, 1.0]);
+        $headerBottom = $top - 24;
+        $this->strokeRect($commands, 42, $headerBottom, 511, 24, self::BLACK, 0.7);
+        $this->line($commands, 98, $headerBottom, 98, $top, self::LINE, 0.6);
+        $this->line($commands, 410, $headerBottom, 410, $top, self::LINE, 0.6);
+        $this->line($commands, 480, $headerBottom, 480, $top, self::LINE, 0.6);
+        $this->text($commands, 53, $top - 16, 'CANT.', 8, '/F2', self::BLACK);
+        $this->text($commands, 112, $top - 16, 'DESCRIPCION', 8, '/F2', self::BLACK);
+        $this->text($commands, 420, $top - 16, 'P. UNIT.', 8, '/F2', self::BLACK);
+        $this->text($commands, 490, $top - 16, 'IMPORTE', 8, '/F2', self::BLACK);
 
-        $cursor = $top - 48;
+        $cursor = $headerBottom - 18;
 
         foreach ($items as $index => $item) {
-            $descriptionLines = $this->wrapWords($item['description'], 42);
-            $rowHeight = max(30, count($descriptionLines) * 13 + 17);
-            $bottom = $cursor - $rowHeight + 8;
-
-            if ($index % 2 === 0) {
-                $this->fillRect($commands, 42, $bottom, 511, $rowHeight, self::SURFACE);
-            }
+            $descriptionLines = $this->wrapWords($item['description'], 48);
+            $rowHeight = max(24, count($descriptionLines) * 12 + 12);
+            $bottom = $cursor - $rowHeight + 6;
 
             foreach ($descriptionLines as $lineIndex => $description) {
-                $this->text($commands, 56, $cursor - ($lineIndex * 13), $description, 8, '/F1', self::NAVY);
+                $this->text($commands, 112, $cursor - ($lineIndex * 12), $description, 8, '/F1', self::BLACK);
             }
 
-            $this->rightText($commands, 356, $cursor, $item['quantity'], 8, '/F1', self::NAVY);
-            $this->rightText($commands, 451, $cursor, $item['unit_price'], 8, '/F1', self::NAVY);
-            $this->rightText($commands, 540, $cursor, $item['total'], 8, '/F2', self::NAVY);
+            $this->rightText($commands, 88, $cursor, $item['quantity'], 8, '/F1', self::BLACK);
+            $this->rightText($commands, 470, $cursor, $item['unit_price'], 8, '/F1', self::BLACK);
+            $this->rightText($commands, 543, $cursor, $item['total'], 8, '/F1', self::BLACK);
             $this->line($commands, 42, $bottom, 553, $bottom, self::LINE, 0.6);
             $cursor = $bottom - 1;
         }
+
+        $tableBottom = $cursor + 1;
+        $this->line($commands, 42, $tableBottom, 42, $top, self::BLACK, 0.7);
+        $this->line($commands, 553, $tableBottom, 553, $top, self::BLACK, 0.7);
+        $this->line($commands, 98, $tableBottom, 98, $top, self::LINE, 0.6);
+        $this->line($commands, 410, $tableBottom, 410, $top, self::LINE, 0.6);
+        $this->line($commands, 480, $tableBottom, 480, $top, self::LINE, 0.6);
 
         return $cursor;
     }
 
     /** @param array<int, string> $commands @param array<string, mixed> $data */
-    private function drawTotalsAndValidation(array &$commands, array $data, int $cursor): void
+    private function drawTotals(array &$commands, array $data, int $cursor): void
     {
         $top = $cursor - 18;
-        $cardHeight = 128;
-        $bottom = max(78, $top - $cardHeight);
-        $cardTop = $bottom + $cardHeight;
+        $left = 350;
+        $right = 553;
+        $this->line($commands, $left, $top, $right, $top, self::BLACK, 0.8);
+        $this->text($commands, $left, $top - 18, 'SUBTOTAL', 9, '/F1', self::BLACK);
+        $this->rightText($commands, $right - 10, $top - 18, (string) $data['subtotal'], 9, '/F1', self::BLACK);
+        $this->text($commands, $left, $top - 37, 'IGV (18%)', 9, '/F1', self::BLACK);
+        $this->rightText($commands, $right - 10, $top - 37, (string) $data['igv'], 9, '/F1', self::BLACK);
+        $this->line($commands, $left, $top - 48, $right, $top - 48, self::BLACK, 0.8);
+        $this->text($commands, $left, $top - 70, 'TOTAL', 11, '/F2', self::BLACK);
+        $this->rightText($commands, $right - 10, $top - 70, (string) $data['total'], 11, '/F2', self::BLACK);
+        $this->line($commands, $left, $top - 78, $right, $top - 78, self::BLACK, 0.8);
 
-        // Validation panel makes the status source explicit without pretending the PDF is the CDR.
-        $accepted = $data['status'] === 'accepted' && (string) $data['sunat_code'] === '0';
-        $this->fillRect($commands, 42, $bottom, 258, $cardHeight, $accepted ? self::PALE_GREEN : self::PALE_AMBER);
-        $this->fillRect($commands, 42, $bottom, 5, $cardHeight, $accepted ? self::TEAL : self::BLUE);
-        $this->text($commands, 58, $cardTop - 25, 'ESTADO DEL DOCUMENTO', 7, '/F2', self::BLUE);
-        $this->text($commands, 58, $cardTop - 47, $accepted ? 'Constancia de recepcion' : 'Pendiente de validacion', 11, '/F2', self::NAVY);
-        $code = $data['sunat_code'] !== null ? (string) $data['sunat_code'] : '—';
-        $this->text($commands, 58, $cardTop - 64, 'Codigo CDR: '.$code, 8, '/F1', self::MUTED);
-        $message = $data['sunat_message'] && ! $accepted
-            ? $data['sunat_message']
-            : ($accepted ? 'Constancia de recepcion registrada.' : 'Consulta el XML y la respuesta de SUNAT para completar la revision.');
-        $messageLines = $this->wrapWords($message, 39);
-        foreach (array_slice($messageLines, 0, 2) as $index => $line) {
-            $this->text($commands, 58, $cardTop - 80 - ($index * 12), $line, 7, '/F1', self::MUTED);
-        }
-        $this->text($commands, 58, $bottom + 20, 'Consulta oficial SUNAT', 7, '/F2', self::BLUE);
-        $this->text($commands, 58, $bottom + 8, 'ww3.sunat.gob.pe/ol-ti-itconsvalicpe', 6, '/F1', self::MUTED);
-
-        $this->fillRect($commands, 319, $bottom, 234, $cardHeight, self::SURFACE);
-        $this->text($commands, 337, $cardTop - 25, 'RESUMEN DE LA OPERACION', 7, '/F2', self::BLUE);
-        $this->text($commands, 337, $cardTop - 48, 'Valor de venta', 8, '/F1', self::MUTED);
-        $this->rightText($commands, 535, $cardTop - 48, (string) $data['subtotal'], 9, '/F2', self::NAVY, true);
-        $this->text($commands, 337, $cardTop - 67, 'IGV (18%)', 8, '/F1', self::MUTED);
-        $this->rightText($commands, 535, $cardTop - 67, (string) $data['igv'], 9, '/F2', self::NAVY, true);
-        $this->line($commands, 337, $cardTop - 79, 535, $cardTop - 79, self::LINE, 0.8);
-        $this->text($commands, 337, $cardTop - 104, 'TOTAL', 9, '/F2', self::NAVY);
-        $this->rightText($commands, 535, $cardTop - 104, (string) $data['total'], 15, '/F2', self::BLUE, true);
-
-        if ($data['digest']) {
-            $this->text($commands, 337, $bottom + 19, 'Valor resumen: '.$this->shortText($data['digest'], 60), 6, '/F1', self::MUTED);
-        }
+        $status = $data['status'] === 'accepted' ? 'ACEPTADO POR SUNAT' : strtoupper((string) $data['status']);
+        $this->text($commands, 42, max(74, $top - 70), 'ESTADO: '.$status, 8, '/F1', self::GRAY);
     }
 
     /** @param array<int, string> $commands */
     private function drawFooter(array &$commands, int $page, int $totalPages): void
     {
         $this->line($commands, 42, 56, 553, 56, self::LINE, 0.8);
-        $this->text($commands, 42, 42, 'FacturaYa AI · Representacion impresa del comprobante electronico', 7, '/F1', self::MUTED);
-        $this->rightText($commands, 553, 42, 'Pagina '.$page.' de '.$totalPages, 7, '/F1', self::MUTED);
-        $this->text($commands, 42, 29, 'La validez tributaria se acredita con el XML firmado y el CDR de SUNAT.', 6, '/F1', self::MUTED);
-    }
-
-    /** @param array<int, string> $commands */
-    private function fillRect(array &$commands, float $x, float $y, float $width, float $height, array $color): void
-    {
-        $commands[] = $this->color($color, 'rg');
-        $commands[] = sprintf('%.2f %.2f %.2f %.2f re f', $x, $y, $width, $height);
+        $this->text($commands, 42, 40, 'Representacion impresa del comprobante electronico', 7, '/F1', self::GRAY);
+        $this->rightText($commands, 553, 40, 'Pagina '.$page.' de '.$totalPages, 7, '/F1', self::GRAY);
     }
 
     /** @param array<int, string> $commands */
@@ -348,6 +292,12 @@ final class InvoicePdfService
     {
         $width = $this->textWidth($value, $size);
         $this->text($commands, max(42, $right - $width), $y, $value, $size, $font, $color, $boldValue);
+    }
+
+    /** @param array<int, string> $commands */
+    private function centerText(array &$commands, float $center, float $y, string $value, int $size, string $font, array $color): void
+    {
+        $this->text($commands, $center - ($this->textWidth($value, $size) / 2), $y, $value, $size, $font, $color);
     }
 
     private function textWidth(string $value, int $size): float

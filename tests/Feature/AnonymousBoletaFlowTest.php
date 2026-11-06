@@ -91,6 +91,63 @@ class AnonymousBoletaFlowTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_anonymous_boleta_preserves_an_optional_customer_name_everywhere_except_the_fiscal_xml(): void
+    {
+        $draft = $this->postJson('/api/invoice-drafts/import', [
+            ...$this->payload(),
+            'customer_document_type' => '0',
+            'customer_name' => '  Patricia M  ',
+        ])->assertCreated()
+            ->assertJsonPath('data.customer.document_type', '0')
+            ->assertJsonPath('data.customer.ruc', null)
+            ->assertJsonPath('data.customer.name', 'Patricia M')
+            ->assertJsonPath('data.customer.is_anonymous', true)
+            ->json('data');
+
+        $this->assertDatabaseHas('invoice_drafts', [
+            'id' => $draft['id'],
+            'customer_document_type' => '0',
+            'customer_ruc' => null,
+            'customer_name' => 'Patricia M',
+        ]);
+
+        $this->putJson('/api/invoice-drafts/'.$draft['id'], [
+            ...$this->payload(),
+            'customer_document_type' => '0',
+            'customer_name' => '  Patricia M  ',
+            'currency' => 'PEN',
+            'items' => $this->items(125),
+        ])->assertOk()
+            ->assertJsonPath('data.customer.name', 'Patricia M')
+            ->assertJsonPath('data.customer.is_anonymous', true);
+
+        $issued = $this->postJson('/api/invoice-drafts/'.$draft['id'].'/issue')
+            ->assertCreated()
+            ->assertJsonPath('data.status', 'accepted')
+            ->json('data');
+        $invoice = Invoice::findOrFail($issued['id']);
+        $xml = Storage::disk('local')->get($invoice->xml_path);
+        $this->assertStringContainsString('<CustomerDocument type="0">-</CustomerDocument>', $xml);
+        $this->assertStringContainsString('<CustomerName>CLIENTE VARIOS</CustomerName>', $xml);
+        $this->assertStringNotContainsString('Patricia M', $xml);
+
+        $pdf = $this->get('/api/invoices/'.$invoice->id.'/files/pdf')->assertOk();
+        $this->assertStringContainsString('Patricia M', $pdf->getContent());
+    }
+
+    public function test_anonymous_boleta_rejects_a_customer_document(): void
+    {
+        $this->postJson('/api/invoice-drafts/import', [
+            ...$this->payload(),
+            'customer_document_type' => '0',
+            'customer_ruc' => '20123456789',
+            'customer_name' => 'Patricia M',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('customer_ruc');
+
+        $this->assertDatabaseCount('invoice_drafts', 0);
+    }
+
     public function test_anonymous_type_remains_invalid_for_facturas(): void
     {
         $this->postJson('/api/invoice-drafts/import', [
@@ -112,17 +169,46 @@ class AnonymousBoletaFlowTest extends TestCase
 
     public function test_anonymous_boleta_over_configured_limit_cannot_consume_a_correlative(): void
     {
-        $id = $this->postJson('/api/invoice-drafts/import', $this->payload())
-            ->assertCreated()->json('data.id');
+        $id = $this->postJson('/api/invoice-drafts/import', [
+            ...$this->payload(),
+            'customer_name' => 'Patricia M',
+        ])->assertCreated()
+            ->assertJsonPath('data.customer.name', 'Patricia M')
+            ->json('data.id');
         $this->putJson('/api/invoice-drafts/'.$id, [
             ...$this->payload(),
+            'customer_name' => 'Patricia M',
             'currency' => 'PEN',
             'items' => $this->items(700.01),
-        ])->assertOk()->assertJsonPath('data.totals.total', '700.01');
+        ])->assertOk()
+            ->assertJsonPath('data.customer.name', 'Patricia M')
+            ->assertJsonPath('data.totals.total', '700.01');
         $this->postJson('/api/invoice-drafts/'.$id.'/issue')->assertUnprocessable();
         $this->assertSame(0, Invoice::count());
         $this->assertSame(0, InvoiceSequence::count());
         $this->assertSame('review_required', InvoiceDraft::findOrFail($id)->status);
+    }
+
+    public function test_anonymous_non_pen_boleta_keeps_the_name_but_cannot_be_issued(): void
+    {
+        $id = $this->postJson('/api/invoice-drafts/import', [
+            ...$this->payload(),
+            'customer_name' => 'Patricia M',
+        ])->assertCreated()->json('data.id');
+
+        $this->putJson('/api/invoice-drafts/'.$id, [
+            ...$this->payload(),
+            'customer_name' => 'Patricia M',
+            'currency' => 'USD',
+            'items' => $this->items(125),
+        ])->assertOk()
+            ->assertJsonPath('data.customer.name', 'Patricia M')
+            ->assertJsonPath('data.currency', 'USD');
+
+        $this->postJson('/api/invoice-drafts/'.$id.'/issue')
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Las boletas en moneda distinta a PEN deben incluir la identificación del cliente.');
+        $this->assertDatabaseCount('invoices', 0);
     }
 
     private function payload(): array

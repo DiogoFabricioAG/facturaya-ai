@@ -5,6 +5,7 @@ use App\Http\Controllers\CompanyProfileController;
 use App\Http\Controllers\CompanyTokenController;
 use App\Http\Controllers\CreditNoteController;
 use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\DespatchController;
 use App\Http\Controllers\FiscalOperationController;
 use App\Http\Controllers\FiscalPreviewController;
 use App\Http\Controllers\FiscalSetupProbeController;
@@ -32,6 +33,7 @@ Route::prefix('internal')->middleware(RequireCompanyProfileBridge::class)->group
 });
 
 Route::prefix('admin')->middleware('platform.admin')->group(function (): void {
+    Route::put('/companies/{company}/gre-credentials', [DespatchController::class, 'credentials']);
     Route::apiResource('companies', CompanyController::class)->except('destroy');
     Route::post('/companies/{company}/tokens', [CompanyTokenController::class, 'store']);
     Route::delete('/companies/{company}/tokens/{companyApiToken}', [CompanyTokenController::class, 'destroy']);
@@ -39,6 +41,12 @@ Route::prefix('admin')->middleware('platform.admin')->group(function (): void {
 });
 
 Route::middleware('company.auth')->group(function (): void {
+    Route::get('/despatches', [DespatchController::class, 'index']);
+    Route::post('/despatches', [DespatchController::class, 'store']);
+    Route::get('/despatches/{despatch}', [DespatchController::class, 'show']);
+    Route::post('/despatches/{despatch}/issue', [DespatchController::class, 'issue']);
+    Route::post('/despatches/{despatch}/status', [DespatchController::class, 'refresh']);
+    Route::get('/despatches/{despatch}/files/{type}', [DespatchController::class, 'file'])->whereIn('type', ['xml', 'cdr']);
     Route::get('/company', fn (CompanyContext $context) => new CompanyResource($context->company()));
     Route::get('/customers/lookup-dni/{dni}', [CustomerController::class, 'lookupDni']);
     Route::get('/customers/lookup/{ruc}', [CustomerController::class, 'lookup']);

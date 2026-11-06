@@ -16,6 +16,8 @@ use Greenter\Model\Client\Client;
 use Greenter\Model\Company\Address;
 use Greenter\Model\Company\Company;
 use Greenter\Model\Sale\FormaPagos\FormaPagoContado;
+use Greenter\Model\Sale\FormaPagos\FormaPagoCredito;
+use Greenter\Model\Sale\Cuota;
 use Greenter\Model\Sale\Invoice;
 use Greenter\Model\Sale\Legend;
 use Greenter\Model\Sale\Note;
@@ -170,6 +172,7 @@ final class GreenterSunatGateway implements SunatGateway
 
     private function makeInvoice(InvoiceDraft $draft, StoredInvoice $storedInvoice, StoredCompany $storedCompany): Invoice
     {
+        \App\Services\InvoicePaymentTerms::validate($draft);
         $address = (new Address)
             ->setUbigueo($storedCompany->ubigeo)
             ->setDepartamento($storedCompany->department)
@@ -210,7 +213,13 @@ final class GreenterSunatGateway implements SunatGateway
             ->setSerie($storedInvoice->series)
             ->setCorrelativo((string) $storedInvoice->correlative)
             ->setFechaEmision(new DateTime($draft->issue_date->format('Y-m-d').' 12:00:00', new DateTimeZone('America/Lima')))
-            ->setFormaPago(new FormaPagoContado)
+            ->setFormaPago(($draft->payment_method ?? 'contado') === 'credito'
+                ? new FormaPagoCredito((float) $draft->outstanding_amount, $draft->currency)
+                : new FormaPagoContado)
+            ->setCuotas(array_map(fn (array $quota) => (new Cuota)
+                ->setMoneda($draft->currency)->setMonto((float) $quota['amount'])
+                ->setFechaPago(new DateTime($quota['due_date'].' 12:00:00', new DateTimeZone('America/Lima'))),
+                $draft->installments ?? []))
             ->setTipoMoneda($draft->currency)
             ->setCompany($company)
             ->setClient($client)

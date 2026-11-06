@@ -13,6 +13,7 @@ class BoletaCustomerPolicyTest extends TestCase
         $draft = new InvoiceDraft([
             'document_type' => '03',
             'customer_document_type' => '0',
+            'customer_name' => 'Patricia M',
             'total' => '700.00',
         ]);
 
@@ -24,6 +25,7 @@ class BoletaCustomerPolicyTest extends TestCase
         $draft = new InvoiceDraft([
             'document_type' => '03',
             'customer_document_type' => '0',
+            'customer_name' => 'Patricia M',
             'total' => '700.01',
         ]);
 
@@ -44,5 +46,21 @@ class BoletaCustomerPolicyTest extends TestCase
         ]);
 
         $this->assertNull((new BoletaCustomerPolicy)->validate($draft));
+    }
+
+    public function test_anonymous_foreign_currency_boleta_requires_identification_even_with_a_name(): void
+    {
+        $draft = new InvoiceDraft([
+            'document_type' => '03',
+            'customer_document_type' => '0',
+            'customer_name' => 'Patricia M',
+            'currency' => 'USD',
+            'total' => '125.00',
+        ]);
+
+        $this->assertSame(
+            'Las boletas en moneda distinta a PEN deben incluir la identificación del cliente.',
+            (new BoletaCustomerPolicy)->validate($draft),
+        );
     }
 }

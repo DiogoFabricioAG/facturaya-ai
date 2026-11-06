@@ -71,6 +71,7 @@ final class FakeSunatGateway implements SunatGateway
         $customerDocument = $anonymous ? '-' : (string) $draft->customer_ruc;
         $customerName = $anonymous ? 'CLIENTE VARIOS' : (string) $draft->customer_name;
         $customer = htmlspecialchars($customerName, ENT_XML1);
+        $terms = htmlspecialchars(json_encode(\App\Services\InvoicePaymentTerms::attributes([], $draft), JSON_THROW_ON_ERROR), ENT_XML1);
 
         return <<<XML
 <?xml version="1.0" encoding="UTF-8"?>
@@ -78,6 +79,7 @@ final class FakeSunatGateway implements SunatGateway
   <ID>{$invoice->series}-{$invoice->correlative}</ID>
   <CustomerDocument type="{$customerDocumentType}">{$customerDocument}</CustomerDocument>
   <CustomerName>{$customer}</CustomerName>
+  <PaymentTerms>{$terms}</PaymentTerms>
   <TaxableAmount>{$draft->subtotal}</TaxableAmount>
   <TaxAmount>{$draft->igv}</TaxAmount>
   <PayableAmount>{$draft->total}</PayableAmount>

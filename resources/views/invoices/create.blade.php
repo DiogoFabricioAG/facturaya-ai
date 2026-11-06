@@ -104,7 +104,7 @@
                             <small id="customer-document-help">11 dígitos</small>
                         </label>
                         <label id="customer-name-field" class="field field-wide">
-                            <span>Nombre o razón social</span>
+                            <span>Nombre o razón social <small>(opcional sin documento)</small></span>
                             <input name="customer_name" maxlength="255" placeholder="Ej. Comercial Andina S.A.C." autocomplete="organization" required>
                             <small id="customer-lookup-status" class="field-help customer-lookup-status" aria-live="polite" hidden></small>
                         </label>
@@ -114,6 +114,23 @@
                         </label>
                     </div>
 
+                    <div class="divider"></div>
+                    <label class="field">
+                        <span>¿Cuándo pagará el cliente?</span>
+                        <select name="payment_method" id="payment-method" required>
+                            <option value="">Selecciona la condición de pago</option>
+                            <option value="contado">Contado: pago completo en la fecha de emisión</option>
+                            <option value="credito">Crédito: pago posterior a la emisión</option>
+                        </select>
+                    </label>
+                    <fieldset id="credit-payment-fields" hidden>
+                        <legend>Pago al crédito (facturas)</legend>
+                        <label class="field"><span>Saldo neto pendiente en la moneda del comprobante</span><input name="outstanding_amount" inputmode="decimal" placeholder="Ej. 12630.00" disabled></label>
+                        <p>Indica el importe pendiente real. Si hubo anticipo, no lo incluyas en el saldo. Las cuotas deben sumar ese saldo.</p>
+                        <div id="payment-installments"></div>
+                        <button id="add-payment-installment" type="button">Agregar cuota</button>
+                        <small>Hasta 12 cuotas. Indica fechas completas, incluido el año.</small>
+                    </fieldset>
                     <div class="divider"></div>
                     <div class="section-heading compact">
                         <span class="section-number">2</span>
@@ -176,6 +193,7 @@
                             <span>Cliente</span>
                             <strong id="summary-client"></strong>
                             <small id="summary-ruc"></small>
+                            <small id="summary-payment"></small>
                             <small id="summary-company" class="summary-company"></small>
                             <label id="save-customer-choice" class="save-customer-choice">
                                 <input id="save-customer" type="checkbox">

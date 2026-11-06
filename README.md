@@ -24,6 +24,8 @@ El RUC del cliente, fecha y productos se reciben en cada factura; no son variabl
 7. El driver configurado para esa empresa genera una respuesta local o transmite a SUNAT con Greenter.
 8. Desde una factura aceptada puede emitir notas de crédito totales o parciales, siempre vinculadas al comprobante original.
 
+Backend, web e integración Manolo publicados: [condición de pago al crédito](docs/invoice-payment-terms.md) y [API de guía remitente por venta y transporte privado](docs/despatches.md). [Evidencia de despliegue y recuperación](docs/deployment-2026-11-06-credit-gre.md). No regularizan documentos anteriores ni habilitan emisores GRE reales automáticamente.
+
 ## Inicio rápido en Windows
 
 Requisitos: PHP 8.3+, Composer 2 y Node.js 22+.
