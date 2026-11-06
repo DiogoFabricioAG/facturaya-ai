@@ -47,3 +47,10 @@ El rollback restaura imágenes y fuente del host; no hay esquema que revertir y 
 - Manolo desplegado (`36b78`) trata `send_failed` como resultado incierto; mostrar el motivo depende de publicar `ac564` en meowlab.
 - La T001-1 consumió el correlativo 1: la siguiente guía real será T001-2. Los PDF de trabajo entregados con T001-00000001 a 06 no corresponden a guías registradas en SUNAT.
 - Sin PDF/QR de guía en FacturaYa. `feat/gre-web` no está fusionada en `main`.
+
+## Seguimiento 06/11/2026 22:40 UTC: correlativo T001-1 liberado
+
+- El operador consultó en SUNAT SOL (GRE emitidas, GRE Remitente, serie T001, número 00000001): sin resultados.
+- Con guardas transaccionales (guía `unknown`, número 1, sin ticket, próximo número 2, ninguna otra guía numerada), la guía `01m6sc9mh8yv926nk4v0sct838` pasó a `send_failed`, código `SOL_SIN_REGISTRO`, sin correlativo y conservando su XML. El próximo número T001 de producción volvió a 1.
+- La siguiente guía emitida será T001-1. Estado anterior y posterior: `t001-1-before.json` y `t001-1-after.json` en el directorio del release.
+- Si SUNAT rechazara la nueva T001-1 como ya registrada, el envío queda `unknown` con ese mensaje y no se reenvía.
