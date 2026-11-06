@@ -1,6 +1,6 @@
 # Guía de remisión remitente: venta y transporte privado
 
-Backend publicado el 06/11/2026 UTC en `https://facturas.meowlab.tech`, con migración aditiva aplicada. No se probaron emisiones reales ni se habilitaron credenciales GRE de empresas. Evidencia operativa y rollback: [despliegue crédito/GRE](deployment-2026-11-06-credit-gre.md).
+Backend publicado el 06/11/2026 UTC en `https://facturas.meowlab.tech`, con migración aditiva aplicada. No se probaron emisiones reales ni se habilitaron credenciales GRE de empresas. Evidencia operativa y rollback: [despliegue crédito/GRE](deployment-2026-11-06-credit-gre.md). Pantalla web y registro del motivo de SUNAT publicados el 06/11/2026 22:31 UTC: [acta](deployment-2026-11-06-gre-web.md).
 
 Greenter incluye `Greenter\Api`, que usa la API REST GRE de SUNAT, distinta del SOAP de facturas. Fuentes: https://greenter.dev/production/ y https://cpe.sunat.gob.pe/sites/default/files/inline-files/Manual_Servicios_GRE.pdf.
 
