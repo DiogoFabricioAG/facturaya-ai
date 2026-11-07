@@ -26,7 +26,7 @@ final class FiscalOperationService
     public function __construct(
         private readonly InvoiceSequenceService $sequences,
         private readonly SunatGatewayManager $gateways,
-        private readonly FiscalInvoicePdfService $invoicePdfs,
+        private readonly InvoicePdfService $invoicePdfs,
         private readonly CreditNotePdfService $creditNotePdfs,
         private readonly ?SunatGateway $gatewayOverride = null,
     ) {}

@@ -80,9 +80,9 @@ class InvoicePaymentTermsTest extends TestCase
         $this->assertSame('12630.00', $xpath->evaluate('string(//cac:PaymentTerms[2]/cbc:Amount)'));
         $issued = $this->postJson('/api/invoice-drafts/'.$id.'/issue')->assertCreated()->json('data.id');
         $pdf = $this->get('/api/invoices/'.$issued.'/files/pdf')->assertOk()->getContent();
-        $this->assertStringContainsString('FORMA DE PAGO: CREDITO', $pdf);
-        $this->assertStringContainsString('2026-12-05', $pdf);
-        $this->assertStringContainsString('12630.00', $pdf);
+        $this->assertStringContainsString(iconv('UTF-8', 'Windows-1252', '(CRÉDITO)'), $pdf);
+        $this->assertStringContainsString('(S/ 12,630.00)', $pdf);
+        $this->assertStringContainsString('(05/12/2026  '.iconv('UTF-8', 'Windows-1252', '·').'  S/ 12,630.00)', $pdf);
         $this->putJson('/api/invoice-drafts/'.$id, $this->updatePayload())->assertConflict();
         Http::assertNothingSent();
     }
