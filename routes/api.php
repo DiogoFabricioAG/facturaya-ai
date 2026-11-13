@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\IssuedDocumentController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\CompanyProfileController;
 use App\Http\Controllers\CompanyTokenController;
@@ -68,6 +69,9 @@ Route::middleware('company.auth')->group(function (): void {
     Route::get('/invoices/{invoice}/files/{type}', [InvoiceController::class, 'file'])
         ->whereIn('type', ['pdf', 'xml', 'cdr'])
         ->name('api.invoices.file');
+    // Portal app.meowlab.tech (ADR-0006, fase 3): sólo lectura.
+    Route::get('/issued-documents', [IssuedDocumentController::class, 'index']);
+    Route::get('/reports/monthly', [IssuedDocumentController::class, 'monthly']);
     Route::get('/invoices/{invoice}/credit-notes', [CreditNoteController::class, 'index']);
     Route::post('/invoices/{invoice}/credit-notes', [CreditNoteController::class, 'store']);
     Route::get('/credit-notes/{creditNote}/files/{type}', [CreditNoteController::class, 'file'])
