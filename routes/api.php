@@ -11,6 +11,7 @@ use App\Http\Controllers\FiscalOperationController;
 use App\Http\Controllers\FiscalPreviewController;
 use App\Http\Controllers\FiscalSetupProbeController;
 use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\InternalTaxpayerController;
 use App\Http\Controllers\InvoiceDraftController;
 use App\Http\Middleware\RequireCompanyProfileBridge;
 use App\Http\Middleware\RequireFiscalDiagnosticsBridge;
@@ -31,6 +32,8 @@ Route::prefix('internal')->middleware(RequireCompanyProfileBridge::class)->group
     Route::get('/company-profile/{company}', [CompanyProfileController::class, 'show']);
     Route::post('/company-profile/{company}/sync', [CompanyProfileController::class, 'sync']);
     Route::post('/company-profile/{company}/fiscal-config', [CompanyProfileController::class, 'fiscalConfig']);
+    // Portal app.meowlab.tech (ADR-0010): consulta de RUC sin crear clientes.
+    Route::get('/taxpayers/{ruc}', [InternalTaxpayerController::class, 'show'])->where('ruc', '[0-9]{11}');
 });
 
 Route::prefix('admin')->middleware('platform.admin')->group(function (): void {
