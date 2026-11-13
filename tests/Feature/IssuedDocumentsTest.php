@@ -57,6 +57,23 @@ class IssuedDocumentsTest extends TestCase
         $this->getJson('/api/issued-documents?type=99')->assertUnprocessable();
     }
 
+    public function test_includes_the_products_of_each_document_only_when_asked(): void
+    {
+        $factura = $this->invoice($this->company, 1, ['issue_date' => '2026-11-05']);
+        $line = $factura->draft->items()->create(['position' => 1, 'description' => 'Polo blanco M', 'quantity' => '3',
+            'entered_unit_price' => 1, 'unit_value' => 1, 'unit_price_with_igv' => 1, 'line_base' => 1, 'igv' => 0, 'line_total' => 1]);
+        $note = CreditNote::create(['company_id' => $this->company->id, 'invoice_id' => $factura->id, 'sunat_environment' => 'production',
+            'series' => 'FC01', 'correlative' => 1, 'issue_date' => '2026-11-08', 'reason_code' => '07',
+            'reason_description' => 'Devolución', 'currency' => 'PEN', 'subtotal' => '10.00', 'igv' => '1.80', 'total' => '11.80', 'status' => 'accepted']);
+        $note->items()->create(['invoice_draft_item_id' => $line->id, 'position' => 1, 'description' => 'Polo blanco M', 'quantity' => '1',
+            'entered_unit_price' => 1, 'unit_value' => 1, 'unit_price_with_igv' => 1, 'line_base' => 1, 'igv' => 0, 'line_total' => 1]);
+
+        $this->assertArrayNotHasKey('items', $this->getJson('/api/issued-documents')->assertOk()->json('data.0'));
+        $this->getJson('/api/issued-documents?with_items=1')->assertOk()
+            ->assertJsonPath('data.0.items', [['description' => 'Polo blanco M', 'quantity' => '1.000']])
+            ->assertJsonPath('data.1.items', [['description' => 'Polo blanco M', 'quantity' => '3.000']]);
+    }
+
     public function test_monthly_summary_adds_accepted_sales_and_subtracts_credit_notes(): void
     {
         $a = $this->invoice($this->company, 1, ['issue_date' => '2026-11-05', 'subtotal' => '100.00', 'igv' => '18.00', 'total' => '118.00']);

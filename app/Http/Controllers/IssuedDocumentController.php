@@ -26,8 +26,11 @@ class IssuedDocumentController extends Controller
             'to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:from'],
             'type' => ['nullable', 'in:01,03,07'],
             'page' => ['nullable', 'integer', 'min:1', 'max:1000'],
+            // Stock Cat (MeowLab ADR-0014): the products of each document, to move stock.
+            'with_items' => ['nullable', 'boolean'],
         ]);
         $company = $context->company();
+        $withItems = (bool) ($filters['with_items'] ?? false);
         $type = $filters['type'] ?? null;
         $from = $filters['from'] ?? null;
         $to = $filters['to'] ?? null;
@@ -42,11 +45,11 @@ class IssuedDocumentController extends Controller
                     $query->when($from, fn ($q) => $q->whereDate('issue_date', '>=', $from))
                         ->when($to, fn ($q) => $q->whereDate('issue_date', '<=', $to));
                 })
-                ->with('draft')
+                ->with($withItems ? ['draft.items'] : ['draft'])
                 ->latest()
                 ->limit(1000)
                 ->get();
-            $rows = $rows->concat($invoices->map(fn (Invoice $invoice): array => $this->presentInvoice($invoice)));
+            $rows = $rows->concat($invoices->map(fn (Invoice $invoice): array => $this->presentInvoice($invoice, $withItems)));
         }
         if ($type === null || $type === '07') {
             $notes = CreditNote::query()
@@ -54,11 +57,11 @@ class IssuedDocumentController extends Controller
                 ->where('sunat_environment', $company->sunat_environment)
                 ->when($from, fn ($q) => $q->whereDate('issue_date', '>=', $from))
                 ->when($to, fn ($q) => $q->whereDate('issue_date', '<=', $to))
-                ->with('invoice.draft')
+                ->with($withItems ? ['invoice.draft', 'items'] : ['invoice.draft'])
                 ->latest()
                 ->limit(1000)
                 ->get();
-            $rows = $rows->concat($notes->map(fn (CreditNote $note): array => $this->presentCreditNote($note)));
+            $rows = $rows->concat($notes->map(fn (CreditNote $note): array => $this->presentCreditNote($note, $withItems)));
         }
 
         $sorted = $rows->sortBy([['issue_date', 'desc'], ['created_at', 'desc']])->values();
@@ -133,12 +136,24 @@ class IssuedDocumentController extends Controller
         ]);
     }
 
-    private function presentInvoice(Invoice $invoice): array
+    /** @return array<int, array{description: string, quantity: string}> */
+    private function items(iterable $items): array
+    {
+        $rows = [];
+        foreach ($items as $item) {
+            $rows[] = ['description' => trim((string) $item->description), 'quantity' => number_format((float) $item->quantity, 3, '.', '')];
+        }
+
+        return $rows;
+    }
+
+    private function presentInvoice(Invoice $invoice, bool $withItems = false): array
     {
         $draft = $invoice->draft;
         $type = $invoice->document_type ?: '01';
 
         return [
+            ...($withItems ? ['items' => $this->items($draft?->items ?? [])] : []),
             'id' => $invoice->id,
             'kind' => 'invoice',
             'document_type' => $type,
@@ -166,11 +181,12 @@ class IssuedDocumentController extends Controller
         ];
     }
 
-    private function presentCreditNote(CreditNote $note): array
+    private function presentCreditNote(CreditNote $note, bool $withItems = false): array
     {
         $draft = $note->invoice?->draft;
 
         return [
+            ...($withItems ? ['items' => $this->items($note->items)] : []),
             'id' => $note->id,
             'kind' => 'credit_note',
             'document_type' => '07',
