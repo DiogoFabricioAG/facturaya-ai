@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\CreditNote;
+use Illuminate\Support\Facades\Storage;
 
 final class CreditNotePdfService
 {
@@ -18,6 +19,9 @@ final class CreditNotePdfService
 
     private const LINE = [0.65, 0.65, 0.65];
 
+    /** QR side in points (about 23 mm); it sits at the bottom left of the last page, below the detail floor. */
+    private const QR_SIZE = 66.0;
+
     public function render(CreditNote $creditNote): string
     {
         $creditNote->loadMissing(['company', 'invoice.draft', 'items']);
@@ -32,6 +36,10 @@ final class CreditNotePdfService
 
         $data = [
             'number' => $creditNote->number,
+            // SUNAT QR (anexo N.° 6, 6.4), from the signed XML.
+            'qr' => SunatQrPayload::fromXml($creditNote->xml_path && Storage::disk('local')->exists($creditNote->xml_path)
+                ? (string) Storage::disk('local')->get($creditNote->xml_path)
+                : ''),
             'document_type' => '07',
             'document_name' => 'NOTA DE CREDITO ELECTRONICA',
             'series' => (string) $creditNote->series,
@@ -97,6 +105,10 @@ final class CreditNotePdfService
 
             if ($lastPage) {
                 $this->drawTotals($commands, $data, $cursor);
+                if ($data['qr'] ?? null) {
+                    $matrix = (new QrCodeEncoder)->encode((string) $data['qr']);
+                    $commands[] = QrCodeEncoder::pdfCommands($matrix, 42, 122, self::QR_SIZE / count($matrix));
+                }
             } else {
                 $this->text($commands, 42, 74, 'Continua en la siguiente pagina', 8, '/F1', self::GRAY);
             }

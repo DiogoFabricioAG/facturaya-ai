@@ -24,6 +24,12 @@ final class InvoicePdfService
     /** Lowest baseline for page content; the footer lives below it. */
     private const CONTENT_FLOOR = 66;
 
+    /** With the SUNAT QR the footer grows to hold it at the bottom of the page (anexo N.° 6, 6.4.4). */
+    private const CONTENT_FLOOR_WITH_QR = 122;
+
+    /** QR side in points, quiet zone excluded: 66 pt is about 23 mm, well under the 6 cm limit. */
+    private const QR_SIZE = 66.0;
+
     private const INK = [0.17, 0.21, 0.27];
 
     private const MUTED = [0.45, 0.50, 0.57];
@@ -69,6 +75,9 @@ final class InvoicePdfService
     public function render(Invoice $invoice): string
     {
         $invoice->loadMissing(['company', 'draft.items']);
+        $xml = $invoice->xml_path && Storage::disk('local')->exists($invoice->xml_path)
+            ? (string) Storage::disk('local')->get($invoice->xml_path)
+            : '';
         $company = $invoice->company;
         $draft = $invoice->draft;
         $documentType = (string) ($invoice->document_type ?: $draft->document_type ?: '01');
@@ -87,7 +96,8 @@ final class InvoicePdfService
             'legend' => $boleta ? 'Boleta de Venta Electrónica' : 'Factura Electrónica',
             'customer_label' => $boleta ? 'Nombre' : 'Razón social',
             'accepted' => $invoice->status === 'accepted',
-            'digest' => $this->extractDigest($invoice),
+            'digest' => $this->extractDigest($xml),
+            'qr' => SunatQrPayload::fromXml($xml),
             'company_name' => trim((string) $company->legal_name) ?: 'Empresa emisora',
             'company_ruc' => (string) $company->ruc,
             'company_address' => $this->address($company),
@@ -138,13 +148,9 @@ final class InvoicePdfService
         ]), static fn (string $value): bool => $value !== ''));
     }
 
-    private function extractDigest(Invoice $invoice): ?string
+    private function extractDigest(string $xml): ?string
     {
-        if (! $invoice->xml_path || ! Storage::disk('local')->exists($invoice->xml_path)) {
-            return null;
-        }
-
-        return preg_match('~<(?:[A-Za-z0-9_]+:)?DigestValue>([^<]+)</~i', Storage::disk('local')->get($invoice->xml_path), $matches) === 1
+        return preg_match('~<(?:[A-Za-z0-9_]+:)?DigestValue>([^<]+)</~i', $xml, $matches) === 1
             ? trim($matches[1])
             : null;
     }
@@ -154,6 +160,8 @@ final class InvoicePdfService
     {
         $pages = [];
         $commands = [];
+        $qr = ($data['qr'] ?? null) ? (new QrCodeEncoder)->encode((string) $data['qr']) : null;
+        $floor = $qr ? self::CONTENT_FLOOR_WITH_QR : self::CONTENT_FLOOR;
         $y = $this->drawDocumentSections($commands, $data, $this->drawHeader($commands, $data));
         $count = count($data['items']);
         $y = $this->drawSectionBar($commands, $y, 'DETALLE DE PRODUCTOS', $count.' '.($count === 1 ? 'producto' : 'productos'));
@@ -162,7 +170,7 @@ final class InvoicePdfService
         foreach ($data['items'] as $index => $item) {
             $lines = $this->wrap($item['description'], self::COLUMN_EDGES[2] - self::COLUMN_EDGES[1] - 16, 8.5);
             $height = max(23, count($lines) * 11 + 12);
-            if ($y - $height < self::CONTENT_FLOOR) {
+            if ($y - $height < $floor) {
                 $pages[] = $commands;
                 $commands = [];
                 $y = $this->drawSectionBar($commands, $this->drawHeader($commands, $data), 'DETALLE DE PRODUCTOS (CONTINUACIÓN)', '');
@@ -172,7 +180,7 @@ final class InvoicePdfService
         }
 
         $y -= 14;
-        if ($y - $this->summaryHeight($data) < self::CONTENT_FLOOR) {
+        if ($y - $this->summaryHeight($data) < $floor) {
             $pages[] = $commands;
             $commands = [];
             $y = $this->drawHeader($commands, $data);
@@ -182,7 +190,7 @@ final class InvoicePdfService
 
         $streams = [];
         foreach ($pages as $index => $page) {
-            $this->drawFooter($page, $data, $index + 1, count($pages));
+            $this->drawFooter($page, $data, $index + 1, count($pages), $qr);
             $streams[] = implode("\n", $page);
         }
 
@@ -391,15 +399,48 @@ final class InvoicePdfService
         }
     }
 
-    /** @param array<int, string> $commands @param array<string, mixed> $data */
-    private function drawFooter(array &$commands, array $data, int $page, int $pages): void
+    /**
+     * @param array<int, string> $commands @param array<string, mixed> $data
+     * @param array<int, array<int, bool>>|null $qr
+     */
+    private function drawFooter(array &$commands, array $data, int $page, int $pages, ?array $qr = null): void
     {
+        if ($qr !== null) {
+            $this->drawFooterWithQr($commands, $data, $page, $pages, $qr);
+
+            return;
+        }
         $this->line($commands, self::LEFT, 54, self::RIGHT, 54, self::BORDER, 0.6);
         $status = $data['accepted'] ? ' · Aceptada por SUNAT' : '';
         $this->text($commands, self::LEFT, 42, 'Representación impresa de la '.$data['legend'].$status, 7, false, self::MUTED);
         $this->rightText($commands, self::RIGHT, 42, 'Página '.$page.' de '.$pages, 7, false, self::MUTED);
         $validation = 'Consulte su validez en SUNAT: ww3.sunat.gob.pe/ol-ti-itconsvalicpe';
         $this->text($commands, self::LEFT, 31, ($data['digest'] ? 'Valor resumen: '.$data['digest'].'  ·  ' : '').$validation, 6.5, false, self::MUTED);
+    }
+
+    /**
+     * Footer of a document with QR: legal text on the left, the code at the bottom right of
+     * the last page, in black over white with a quiet zone well above the 1 mm minimum.
+     *
+     * @param array<int, string> $commands @param array<string, mixed> $data @param array<int, array<int, bool>> $qr
+     */
+    private function drawFooterWithQr(array &$commands, array $data, int $page, int $pages, array $qr): void
+    {
+        $this->line($commands, self::LEFT, 106, self::RIGHT, 106, self::BORDER, 0.6);
+        $textRight = self::RIGHT - self::QR_SIZE - 18;
+        $status = $data['accepted'] ? ' · Aceptada por SUNAT' : '';
+        $this->text($commands, self::LEFT, 88, 'Representación impresa de la '.$data['legend'].$status, 7.5, true, self::INK);
+        $y = 75;
+        if ($data['digest']) {
+            $this->text($commands, self::LEFT, $y, $this->fit('Valor resumen: '.$data['digest'], $textRight - self::LEFT, 6.5), 6.5, false, self::MUTED);
+            $y -= 11;
+        }
+        $this->text($commands, self::LEFT, $y, 'Consulte su validez en SUNAT: ww3.sunat.gob.pe/ol-ti-itconsvalicpe', 6.5, false, self::MUTED);
+        $this->text($commands, self::LEFT, 38, 'Página '.$page.' de '.$pages, 7, false, self::MUTED);
+        if ($page === $pages) {
+            $module = self::QR_SIZE / count($qr);
+            $commands[] = QrCodeEncoder::pdfCommands($qr, self::RIGHT - self::QR_SIZE, 98, $module);
+        }
     }
 
     /** @param array<int, string> $streams */
