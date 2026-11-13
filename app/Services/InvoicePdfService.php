@@ -129,6 +129,66 @@ final class InvoicePdfService
         ]);
     }
 
+    /**
+     * A Sales Cat quote drawn with the same layout (ADR-0013). It is not a comprobante:
+     * no QR, no SUNAT legend, and the box says so. Amounts arrive in céntimos, IGV included.
+     *
+     * @param array<string, mixed> $quote see InternalQuotePdfController for the shape
+     */
+    public function renderQuote(array $quote): string
+    {
+        $money = fn (int $cents): string => $this->money($cents / 100, 'PEN');
+        $total = (int) $quote['total_cents'];
+        $taxable = (int) round($total / 1.18);
+        $summary = [];
+        if ((int) $quote['discount_cents'] > 0) {
+            $summary[] = ['Subtotal', $money((int) $quote['subtotal_cents'])];
+            $summary[] = ['Descuento', '-'.$money((int) $quote['discount_cents'])];
+        }
+        $summary[] = ['Valor de venta', $money($taxable)];
+        $summary[] = ['IGV (18%)', $money($total - $taxable)];
+        $customer = $quote['customer'];
+        $documentNumber = trim((string) ($customer['document_number'] ?? ''));
+        $number = 'COT-'.str_pad((string) $quote['number'], 6, '0', STR_PAD_LEFT);
+        $validUntil = $this->date((string) $quote['valid_until']);
+        $company = $quote['company'];
+
+        return $this->makePdf([
+            'number' => $number,
+            'document_name' => 'COTIZACIÓN',
+            'box_subtitle' => 'NO ES UN COMPROBANTE DE PAGO',
+            'document_section' => 'DATOS DE LA COTIZACIÓN',
+            'document_rows' => [
+                [['Fecha de emisión', $this->date((string) $quote['issue_date'])], ['Moneda', 'SOLES (PEN)']],
+                [['Válida hasta', $validUntil], ['Número', $number]],
+            ],
+            'customer_label' => 'Cliente',
+            'customer_name' => trim((string) $customer['name']) ?: 'Cliente varios',
+            'customer_document_label' => match ((string) ($customer['document_type'] ?? '')) {
+                '6' => 'RUC', '1' => 'DNI', '4' => 'CARNÉ DE EXTRANJERÍA', '7' => 'PASAPORTE', default => '—',
+            },
+            'customer_document_number' => $documentNumber !== '' ? $documentNumber : '—',
+            'company_name' => trim((string) ($company['legal_name'] ?? '')) ?: (trim((string) $company['name']) ?: 'Empresa'),
+            'company_ruc' => (string) ($company['ruc'] ?? '') ?: '—',
+            'company_address' => trim((string) ($company['address'] ?? '')),
+            'conditions_title' => 'CONDICIONES',
+            'condition_rows' => [['Validez', 'Hasta el '.$validUntil], ['Precios', 'En soles, IGV incluido']],
+            'summary_rows' => $summary,
+            'total' => $money($total),
+            'amount_in_words' => $this->amountInWords->currency($total / 100, 'PEN'),
+            'notes' => trim((string) ($quote['notes'] ?? '')),
+            'footer_note' => 'Cotización preparada con Sales Cat de MeowLab · No es un comprobante de pago',
+            'accepted' => false,
+            'digest' => null,
+            'items' => array_map(fn (array $line): array => [
+                'description' => trim((string) $line['description']) ?: 'Concepto',
+                'quantity' => number_format((float) $line['quantity'], 3, '.', ''),
+                'unit_price' => $money((int) $line['unit_price_cents']),
+                'total' => $money((int) $line['total_cents']),
+            ], array_values($quote['lines'])),
+        ]);
+    }
+
     private function money(mixed $value, string $currency): string
     {
         return ($currency === 'USD' ? 'US$ ' : 'S/ ').number_format((float) $value, 2, '.', ',');
@@ -222,7 +282,7 @@ final class InvoicePdfService
             $titleSize -= 0.5;
         }
         $this->centerText($commands, $center, 790, $data['document_name'], $titleSize, true, self::INK);
-        $this->centerText($commands, $center, 775, 'COMPROBANTE DE PAGO', 8, false, self::MUTED);
+        $this->centerText($commands, $center, 775, $data['box_subtitle'] ?? 'COMPROBANTE DE PAGO', 8, false, self::MUTED);
         $this->centerText($commands, $center, 755, (string) $data['number'], 12.5, true, self::INK);
 
         return min(718, $y - 4);
@@ -231,9 +291,14 @@ final class InvoicePdfService
     /** @param array<int, string> $commands @param array<string, mixed> $data */
     private function drawDocumentSections(array &$commands, array $data, float $y): float
     {
-        $y = $this->drawSectionBar($commands, $y, 'DATOS DEL COMPROBANTE', '');
-        $y = $this->drawPairRow($commands, $y, ['Fecha de emisión', $data['issue_date']], ['Moneda', $data['currency_label']]);
-        $y = $this->drawPairRow($commands, $y, ['Tipo de comprobante', $data['document_name']], ['Serie y número', (string) $data['number']]);
+        $y = $this->drawSectionBar($commands, $y, $data['document_section'] ?? 'DATOS DEL COMPROBANTE', '');
+        $rows = $data['document_rows'] ?? [
+            [['Fecha de emisión', $data['issue_date']], ['Moneda', $data['currency_label']]],
+            [['Tipo de comprobante', $data['document_name']], ['Serie y número', (string) $data['number']]],
+        ];
+        foreach ($rows as [$left, $right]) {
+            $y = $this->drawPairRow($commands, $y, $left, $right);
+        }
         $y -= 12;
 
         $y = $this->drawSectionBar($commands, $y, 'DATOS DEL CLIENTE', '');
@@ -330,6 +395,9 @@ final class InvoicePdfService
     /** @param array<string, mixed> $data */
     private function paymentRows(array $data): array
     {
+        if (isset($data['condition_rows'])) {
+            return $data['condition_rows'];
+        }
         $rows = [['Forma de pago', $data['payment_method']]];
         if ($data['outstanding'] !== null) {
             $rows[] = ['Saldo pendiente', $data['outstanding']];
@@ -344,13 +412,29 @@ final class InvoicePdfService
     /** @param array<string, mixed> $data */
     private function summaryBodyHeight(array $data): float
     {
-        return max(70, count($this->paymentRows($data)) * 16 + 12);
+        return max(70, count($this->paymentRows($data)) * 16 + 12, 34 + count($this->summaryRows($data)) * 16);
+    }
+
+    /** @param array<string, mixed> $data @return array<int, array{string, string}> */
+    private function summaryRows(array $data): array
+    {
+        return $data['summary_rows'] ?? [['Subtotal', $data['subtotal']], ['IGV (18%)', $data['igv']]];
+    }
+
+    /** @param array<string, mixed> $data @return array<int, string> */
+    private function notesLines(array $data): array
+    {
+        $notes = trim((string) ($data['notes'] ?? ''));
+
+        return $notes === '' ? [] : array_slice($this->wrap('Observaciones: '.$notes, self::WIDTH - 10, 8.5), 0, 8);
     }
 
     /** @param array<string, mixed> $data */
     private function summaryHeight(array $data): float
     {
-        return 18 + $this->summaryBodyHeight($data) + 16 + count($this->wordsLines($data)) * 11;
+        $notes = count($this->notesLines($data));
+
+        return 18 + $this->summaryBodyHeight($data) + 16 + count($this->wordsLines($data)) * 11 + ($notes ? 6 + $notes * 11 : 0);
     }
 
     /** @param array<string, mixed> $data @return array<int, string> */
@@ -368,7 +452,7 @@ final class InvoicePdfService
         $rightLeft = self::LEFT + $leftWidth + 9;
         $rightWidth = self::RIGHT - $rightLeft;
 
-        foreach ([[self::LEFT, $leftWidth, 'CONDICIONES DE PAGO'], [$rightLeft, $rightWidth, 'RESUMEN DE IMPORTES']] as [$x, $width, $title]) {
+        foreach ([[self::LEFT, $leftWidth, $data['conditions_title'] ?? 'CONDICIONES DE PAGO'], [$rightLeft, $rightWidth, 'RESUMEN DE IMPORTES']] as [$x, $width, $title]) {
             $this->fillRect($commands, $x, $top - 18, $width, 18, self::BAR);
             $this->text($commands, $x + 10, $top - 12.5, $title, 8.5, true, self::INK);
             $this->strokeRect($commands, $x, $bottom, $width, $body + 18, self::BORDER, 0.6);
@@ -383,7 +467,7 @@ final class InvoicePdfService
 
         $y = $top - 18 - 16;
         $right = self::RIGHT - 10;
-        foreach ([['Subtotal', $data['subtotal']], ['IGV (18%)', $data['igv']]] as [$label, $value]) {
+        foreach ($this->summaryRows($data) as [$label, $value]) {
             $this->text($commands, $rightLeft + 10, $y, $label, 8.5, false, self::INK);
             $this->rightText($commands, $right, $y, $value, 8.5, true, self::INK);
             $y -= 16;
@@ -397,6 +481,14 @@ final class InvoicePdfService
             $this->text($commands, self::LEFT, $y, $line, 8, true, self::INK);
             $y -= 11;
         }
+        $notes = $this->notesLines($data);
+        if ($notes !== []) {
+            $y -= 6;
+            foreach ($notes as $line) {
+                $this->text($commands, self::LEFT, $y, $line, 8.5, false, self::INK);
+                $y -= 11;
+            }
+        }
     }
 
     /**
@@ -407,6 +499,13 @@ final class InvoicePdfService
     {
         if ($qr !== null) {
             $this->drawFooterWithQr($commands, $data, $page, $pages, $qr);
+
+            return;
+        }
+        if (isset($data['footer_note'])) {
+            $this->line($commands, self::LEFT, 54, self::RIGHT, 54, self::BORDER, 0.6);
+            $this->text($commands, self::LEFT, 42, (string) $data['footer_note'], 7, false, self::MUTED);
+            $this->rightText($commands, self::RIGHT, 42, 'Página '.$page.' de '.$pages, 7, false, self::MUTED);
 
             return;
         }
