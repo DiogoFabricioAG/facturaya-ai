@@ -74,6 +74,20 @@ class IssuedDocumentsTest extends TestCase
             ->assertJsonPath('data.1.items', [['description' => 'Polo blanco M', 'quantity' => '3.000']]);
     }
 
+    public function test_shows_the_credit_terms_of_credit_invoices(): void
+    {
+        $this->invoice($this->company, 1, ['issue_date' => '2026-11-05', 'total' => '118.00', 'payment_method' => 'credito',
+            'outstanding_amount' => '100.00', 'installments' => [['due_date' => '2026-12-05', 'amount' => '50.00'], ['due_date' => '2027-01-05', 'amount' => '50.00']]]);
+        $this->invoice($this->company, 2, ['issue_date' => '2026-11-06', 'payment_method' => 'contado']);
+
+        $response = $this->getJson('/api/issued-documents')->assertOk();
+
+        $response->assertJsonPath('data.0.outstanding_amount', null)->assertJsonPath('data.0.installments', []);
+        $response->assertJsonPath('data.1.payment_method', 'credito')
+            ->assertJsonPath('data.1.outstanding_amount', '100.00')
+            ->assertJsonPath('data.1.installments', [['due_date' => '2026-12-05', 'amount' => '50.00'], ['due_date' => '2027-01-05', 'amount' => '50.00']]);
+    }
+
     public function test_monthly_summary_adds_accepted_sales_and_subtracts_credit_notes(): void
     {
         $a = $this->invoice($this->company, 1, ['issue_date' => '2026-11-05', 'subtotal' => '100.00', 'igv' => '18.00', 'total' => '118.00']);

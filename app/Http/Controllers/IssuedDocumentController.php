@@ -169,6 +169,12 @@ class IssuedDocumentController extends Controller
             'igv' => (string) ($draft?->igv ?? '0.00'),
             'total' => (string) ($draft?->total ?? '0.00'),
             'payment_method' => $draft?->payment_method,
+            // Credit terms for Collections Cat (MeowLab ADR-0015): balance and installments as issued.
+            'outstanding_amount' => $draft?->payment_method === 'credito' && $draft?->outstanding_amount !== null ? (string) $draft->outstanding_amount : null,
+            'installments' => $draft?->payment_method === 'credito' ? array_values(array_map(
+                fn ($installment) => ['due_date' => (string) ($installment['due_date'] ?? ''), 'amount' => (string) ($installment['amount'] ?? '')],
+                is_array($draft->installments) ? $draft->installments : [],
+            )) : [],
             'status' => $invoice->status,
             'sunat_message' => $invoice->sunat_message,
             'related_number' => null,
@@ -202,6 +208,8 @@ class IssuedDocumentController extends Controller
             'igv' => (string) $note->igv,
             'total' => (string) $note->total,
             'payment_method' => null,
+            'outstanding_amount' => null,
+            'installments' => [],
             'status' => $note->status,
             'sunat_message' => $note->sunat_message,
             'related_number' => $note->invoice?->number,
