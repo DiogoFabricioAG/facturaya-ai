@@ -189,6 +189,69 @@ final class InvoicePdfService
         ]);
     }
 
+    /**
+     * A Reorder Cat purchase order with the same layout (ADR-0016 de MeowLab). It goes to the
+     * supplier, so the party box says "Proveedor". A line without a price shows
+     * "Por confirmar" and stays out of the total; the supplier confirms it.
+     *
+     * @param array<string, mixed> $order see InternalPurchaseOrderPdfController for the shape
+     */
+    public function renderPurchaseOrder(array $order): string
+    {
+        $money = fn (int $cents): string => $this->money($cents / 100, 'PEN');
+        $priced = array_filter($order['lines'], static fn (array $line): bool => isset($line['unit_price_cents']));
+        $total = array_sum(array_map(static fn (array $line): int => (int) round((float) $line['quantity'] * (int) $line['unit_price_cents']), $priced));
+        $complete = count($priced) === count($order['lines']);
+        $supplier = $order['supplier'];
+        $documentNumber = trim((string) ($supplier['ruc'] ?? ''));
+        $number = 'OC-'.str_pad((string) $order['number'], 6, '0', STR_PAD_LEFT);
+        $company = $order['company'];
+        $deliver = isset($order['deliver_by']) && $order['deliver_by'] !== null ? $this->date((string) $order['deliver_by']) : 'A coordinar';
+        $summary = [];
+        if ($total > 0) {
+            $taxable = (int) round($total / 1.18);
+            $summary[] = ['Valor de compra', $money($taxable)];
+            $summary[] = ['IGV (18%)', $money($total - $taxable)];
+        }
+        if (! $complete) {
+            $summary[] = ['Precios', 'Por confirmar'];
+        }
+
+        return $this->makePdf([
+            'number' => $number,
+            'document_name' => 'ORDEN DE COMPRA',
+            'box_subtitle' => 'NO ES UN COMPROBANTE DE PAGO',
+            'document_section' => 'DATOS DEL PEDIDO',
+            'document_rows' => [
+                [['Fecha', $this->date((string) $order['issue_date'])], ['Moneda', 'SOLES (PEN)']],
+                [['Entrega', $deliver], ['Número', $number]],
+            ],
+            'customer_section' => 'DATOS DEL PROVEEDOR',
+            'customer_label' => 'Proveedor',
+            'customer_name' => trim((string) $supplier['name']) ?: 'Proveedor',
+            'customer_document_label' => $documentNumber !== '' ? 'RUC' : '—',
+            'customer_document_number' => $documentNumber !== '' ? $documentNumber : '—',
+            'company_name' => trim((string) ($company['legal_name'] ?? '')) ?: (trim((string) $company['name']) ?: 'Empresa'),
+            'company_ruc' => (string) ($company['ruc'] ?? '') ?: '—',
+            'company_address' => trim((string) ($company['address'] ?? '')),
+            'conditions_title' => 'CONDICIONES',
+            'condition_rows' => [['Entrega', $deliver], ['Precios', $complete ? 'En soles, IGV incluido' : 'Por confirmar con el proveedor']],
+            'summary_rows' => $summary,
+            'total' => $total > 0 ? $money($total) : 'Por confirmar',
+            'amount_in_words' => $total > 0 && $complete ? $this->amountInWords->currency($total / 100, 'PEN') : 'Monto por confirmar con el proveedor',
+            'notes' => trim((string) ($order['notes'] ?? '')),
+            'footer_note' => 'Orden de compra preparada con Reorder Cat de MeowLab · No es un comprobante de pago',
+            'accepted' => false,
+            'digest' => null,
+            'items' => array_map(fn (array $line): array => [
+                'description' => trim((string) $line['description']) ?: 'Producto',
+                'quantity' => number_format((float) $line['quantity'], 3, '.', ''),
+                'unit_price' => isset($line['unit_price_cents']) ? $money((int) $line['unit_price_cents']) : 'Por confirmar',
+                'total' => isset($line['unit_price_cents']) ? $money((int) round((float) $line['quantity'] * (int) $line['unit_price_cents'])) : '—',
+            ], array_values($order['lines'])),
+        ]);
+    }
+
     private function money(mixed $value, string $currency): string
     {
         return ($currency === 'USD' ? 'US$ ' : 'S/ ').number_format((float) $value, 2, '.', ',');
@@ -301,7 +364,7 @@ final class InvoicePdfService
         }
         $y -= 12;
 
-        $y = $this->drawSectionBar($commands, $y, 'DATOS DEL CLIENTE', '');
+        $y = $this->drawSectionBar($commands, $y, $data['customer_section'] ?? 'DATOS DEL CLIENTE', '');
         $lines = $this->wrap($data['customer_name'], self::WIDTH - 118, 8.5);
         $height = max(20, count($lines) * 11 + 9);
         $this->strokeRect($commands, self::LEFT, $y - $height, self::WIDTH, $height, self::BORDER, 0.6);

@@ -11,6 +11,7 @@ use App\Http\Controllers\FiscalOperationController;
 use App\Http\Controllers\FiscalPreviewController;
 use App\Http\Controllers\FiscalSetupProbeController;
 use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\InternalPurchaseOrderPdfController;
 use App\Http\Controllers\InternalQuotePdfController;
 use App\Http\Controllers\InternalTaxpayerController;
 use App\Http\Controllers\InvoiceDraftController;
@@ -37,6 +38,8 @@ Route::prefix('internal')->middleware(RequireCompanyProfileBridge::class)->group
     Route::get('/taxpayers/{ruc}', [InternalTaxpayerController::class, 'show'])->where('ruc', '[0-9]{11}');
     // ADR-0013: PDF de una cotización de Sales Cat con la plantilla única; no guarda nada.
     Route::post('/quotes/pdf', InternalQuotePdfController::class);
+    // ADR-0016: PDF de una orden de compra de Reorder Cat con la misma plantilla; no guarda nada.
+    Route::post('/purchase-orders/pdf', InternalPurchaseOrderPdfController::class);
 });
 
 Route::prefix('admin')->middleware('platform.admin')->group(function (): void {
