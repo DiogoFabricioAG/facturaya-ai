@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\CreditNote;
+use Illuminate\Support\Facades\Storage;
 
 final class CreditNotePdfService
 {
@@ -10,11 +11,16 @@ final class CreditNotePdfService
 
     private const PAGE_HEIGHT = 842;
 
+    private const LAST_PAGE_CONTENT_FLOOR = 250;
+
     private const BLACK = [0.0, 0.0, 0.0];
 
     private const GRAY = [0.35, 0.35, 0.35];
 
     private const LINE = [0.65, 0.65, 0.65];
+
+    /** QR side in points (about 23 mm); it sits at the bottom left of the last page, below the detail floor. */
+    private const QR_SIZE = 66.0;
 
     public function render(CreditNote $creditNote): string
     {
@@ -30,6 +36,10 @@ final class CreditNotePdfService
 
         $data = [
             'number' => $creditNote->number,
+            // SUNAT QR (anexo N.° 6, 6.4), from the signed XML.
+            'qr' => SunatQrPayload::fromXml($creditNote->xml_path && Storage::disk('local')->exists($creditNote->xml_path)
+                ? (string) Storage::disk('local')->get($creditNote->xml_path)
+                : ''),
             'document_type' => '07',
             'document_name' => 'NOTA DE CREDITO ELECTRONICA',
             'series' => (string) $creditNote->series,
@@ -78,25 +88,46 @@ final class CreditNotePdfService
     /** @param array<string, mixed> $data */
     private function makePdf(array $data): string
     {
-        $chunks = array_chunk($data['items'], 10);
-        $chunks = $chunks === [] ? [[]] : $chunks;
         $pages = [];
-
-        foreach ($chunks as $index => $items) {
+        $offset = 0;
+        $pageIndex = 0;
+        do {
             $commands = [];
-            $lastPage = $index === count($chunks) - 1;
-            $tableTop = $this->drawHeader($commands, $data, $index === 0);
-            $cursor = $this->drawItemsTable($commands, $items, $tableTop);
+            $tableTop = $this->drawHeader($commands, $data, $pageIndex === 0);
+            [$cursor, $nextOffset] = $this->drawItemsTable(
+                $commands,
+                $data['items'],
+                $tableTop,
+                $offset,
+                self::LAST_PAGE_CONTENT_FLOOR,
+            );
+            $lastPage = $nextOffset >= count($data['items']);
 
             if ($lastPage) {
                 $this->drawTotals($commands, $data, $cursor);
+                if ($data['qr'] ?? null) {
+                    $matrix = (new QrCodeEncoder)->encode((string) $data['qr']);
+                    $commands[] = QrCodeEncoder::pdfCommands($matrix, 42, 122, self::QR_SIZE / count($matrix));
+                }
             } else {
                 $this->text($commands, 42, 74, 'Continua en la siguiente pagina', 8, '/F1', self::GRAY);
             }
 
-            $this->drawFooter($commands, $index + 1, count($chunks));
             $pages[] = implode("\n", $commands);
+            if (! $lastPage && $nextOffset <= $offset) {
+                throw new \RuntimeException('credit_note_pdf_item_does_not_fit_page');
+            }
+            $offset = $nextOffset;
+            $pageIndex++;
+        } while ($offset < count($data['items']) || $pages === []);
+
+        $pageCount = count($pages);
+        foreach ($pages as $index => &$page) {
+            $commands = [$page];
+            $this->drawFooter($commands, $index + 1, $pageCount);
+            $page = implode("\n", $commands);
         }
+        unset($page);
 
         $objects = [
             1 => '<< /Type /Catalog /Pages 2 0 R >>',
@@ -163,7 +194,7 @@ final class CreditNotePdfService
 
         $this->text($commands, 42, 705, 'DATOS DEL EMISOR:', 9, '/F2', self::BLACK);
         $this->text($commands, 50, 686, 'RUC: '.$data['company_ruc'], 9, '/F1', self::BLACK);
-        $this->text($commands, 50, 669, 'RAZON SOCIAL: '.$this->shortText($data['company_name'], 86), 9, '/F1', self::BLACK);
+        $this->text($commands, 50, 669, 'NOMBRE O RAZON SOCIAL: '.$this->shortText($data['company_name'], 78), 9, '/F1', self::BLACK);
         $this->text($commands, 50, 652, 'DOMICILIO FISCAL: '.$this->shortText($data['company_address'] ?: 'No registrado', 82), 9, '/F1', self::BLACK);
 
         $this->text($commands, 42, 624, 'DATOS DEL CLIENTE:', 9, '/F2', self::BLACK);
@@ -176,8 +207,10 @@ final class CreditNotePdfService
         return 542;
     }
 
-    /** @param array<int, string> $commands @param array<int, array<string, string>> $items */
-    private function drawItemsTable(array &$commands, array $items, int $top): int
+    /** @param array<int, string> $commands @param array<int, array<string, string>> $items
+     * @return array{int, int} cursor and offset of the first item for the next page
+     */
+    private function drawItemsTable(array &$commands, array $items, int $top, int $offset, int $bottomFloor): array
     {
         $headerBottom = $top - 24;
         $this->strokeRect($commands, 42, $headerBottom, 511, 24, self::BLACK, 0.7);
@@ -191,15 +224,27 @@ final class CreditNotePdfService
 
         $cursor = $headerBottom - 18;
 
-        foreach ($items as $item) {
+        $count = count($items);
+        for ($index = $offset; $index < $count; $index++) {
+            $item = $items[$index];
+            $descriptionLines = $this->wrapWords($item['description'], 48);
+            $rowHeight = max(24, count($descriptionLines) * 12 + 12);
+            $bottom = $cursor - $rowHeight + 6;
+            if ($bottom < $bottomFloor && $index > $offset) {
+                break;
+            }
+
+            foreach ($descriptionLines as $lineIndex => $description) {
+                $this->text($commands, 105, $cursor - ($lineIndex * 12), $description, 8, '/F1', self::BLACK);
+            }
             $this->text($commands, 50, $cursor, $item['quantity'], 8, '/F1', self::BLACK);
-            $this->text($commands, 105, $cursor, $this->shortText($item['description'], 50), 8, '/F1', self::BLACK);
             $this->rightText($commands, 470, $cursor, $item['unit_price'], 8, '/F1', self::BLACK);
             $this->rightText($commands, 545, $cursor, $item['total'], 8, '/F1', self::BLACK);
-            $cursor -= 18;
+            $this->line($commands, 42, $bottom, 553, $bottom, self::LINE, 0.6);
+            $cursor = $bottom - 1;
         }
 
-        return $cursor;
+        return [$cursor, $index];
     }
 
     /** @param array<int, string> $commands @param array<string, mixed> $data */
@@ -294,5 +339,44 @@ final class CreditNotePdfService
     private function shortText(string $text, int $max): string
     {
         return strlen($text) > $max ? substr($text, 0, $max - 3).'...' : $text;
+    }
+
+    /** @return array<int, string> */
+    private function wrapWords(string $value, int $maxCharacters): array
+    {
+        $value = trim(preg_replace('/\\s+/u', ' ', $value) ?: '');
+        if ($value === '') {
+            return [''];
+        }
+
+        $words = preg_split('/\\s+/u', $value) ?: [];
+        $lines = [];
+        $line = '';
+        foreach ($words as $word) {
+            $characters = preg_split('//u', $word, -1, PREG_SPLIT_NO_EMPTY);
+            if ($characters === false) {
+                $characters = str_split(iconv('UTF-8', 'UTF-8//IGNORE', $word) ?: '');
+            }
+            while (count($characters) > $maxCharacters) {
+                if ($line !== '') {
+                    $lines[] = $line;
+                    $line = '';
+                }
+                $lines[] = implode('', array_slice($characters, 0, $maxCharacters));
+                $characters = array_slice($characters, $maxCharacters);
+            }
+            $part = implode('', $characters);
+            $lineCharacters = preg_split('//u', $line, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+            if ($line !== '' && count($lineCharacters) + 1 + count($characters) > $maxCharacters) {
+                $lines[] = $line;
+                $line = '';
+            }
+            $line .= ($line === '' ? '' : ' ').$part;
+        }
+        if ($line !== '') {
+            $lines[] = $line;
+        }
+
+        return $lines === [] ? [''] : $lines;
     }
 }

@@ -23,6 +23,8 @@ class InvoiceDraft extends Model
             'subtotal' => 'decimal:2',
             'igv' => 'decimal:2',
             'total' => 'decimal:2',
+            'outstanding_amount' => 'decimal:2',
+            'installments' => 'array',
         ];
     }
 

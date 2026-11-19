@@ -9,11 +9,13 @@ use App\Http\Resources\InvoiceDraftResource;
 use App\Models\InvoiceDraft;
 use App\Services\CompanyContext;
 use App\Services\InvoiceDraftCalculator;
+use App\Services\InvoicePaymentTerms;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -44,6 +46,7 @@ class InvoiceDraftController extends Controller
         $source = $this->storeSources($company->id, $sourceText, $file);
 
         $draft = InvoiceDraft::create([
+            ...InvoicePaymentTerms::attributes($request->validated()),
             'company_id' => $company->id,
             ...$request->safe()->only([
                 'document_type',
@@ -73,12 +76,13 @@ class InvoiceDraftController extends Controller
             ]);
 
             $calculator->replaceItems($draft, $items, $draft->tax_mode);
+            InvoicePaymentTerms::validate($draft->fresh());
         } catch (Throwable $exception) {
             report($exception);
             $draft->update([
                 'status' => 'failed',
                 'error_message' => $exception instanceof ValidationException
-                    ? 'El documento no contenía líneas de producto válidas.'
+                    ? collect($exception->errors())->flatten()->first() ?? 'Revisa los datos del borrador.'
                     : $exception->getMessage(),
             ]);
 
@@ -170,17 +174,23 @@ class InvoiceDraftController extends Controller
             return response()->json(['message' => 'Esta factura ya fue emitida y no puede modificarse.'], 409);
         }
 
-        $invoiceDraft->update($request->safe()->only([
-            'document_type',
-            'customer_document_type',
-            'customer_ruc',
-            'customer_name',
-            'issue_date',
-            'tax_mode',
-            'currency',
-        ]));
+        DB::transaction(function () use ($request, $invoiceDraft, $calculator): void {
+            $invoiceDraft->update([
+                ...InvoicePaymentTerms::attributes($request->validated(), $invoiceDraft),
+                ...$request->safe()->only([
+                    'document_type',
+                    'customer_document_type',
+                    'customer_ruc',
+                    'customer_name',
+                    'issue_date',
+                    'tax_mode',
+                    'currency',
+                ]),
+            ]);
 
-        $calculator->replaceItems($invoiceDraft, $request->validated('items'), $invoiceDraft->tax_mode);
+            $calculator->replaceItems($invoiceDraft, $request->validated('items'), $invoiceDraft->tax_mode);
+            InvoicePaymentTerms::validate($invoiceDraft->fresh());
+        });
 
         return new InvoiceDraftResource($invoiceDraft->fresh()->load(['company', 'items', 'invoice']));
     }

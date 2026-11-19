@@ -28,6 +28,8 @@ class InvoiceController extends Controller
         abort_unless($context->owns($invoiceDraft->company_id), 404);
         $company = $context->company();
 
+        \App\Services\InvoicePaymentTerms::validate($invoiceDraft);
+
         $customerError = $boletaCustomerPolicy->validate($invoiceDraft);
         if ($customerError !== null) {
             return response()->json(['message' => $customerError], 422);

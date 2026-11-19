@@ -18,6 +18,8 @@ class Company extends Model
         'sol_user',
         'sol_password',
         'certificate_path',
+        'gre_client_id',
+        'gre_client_secret',
     ];
 
     protected function casts(): array
@@ -25,6 +27,10 @@ class Company extends Model
         return [
             'sol_user' => 'encrypted',
             'sol_password' => 'encrypted',
+            'gre_client_id' => 'encrypted',
+            'gre_client_secret' => 'encrypted',
+            'gre_enabled' => 'boolean',
+            'gre_revision' => 'integer',
             'active' => 'boolean',
             'profile_version' => 'integer',
             'fiscal_revision' => 'integer',

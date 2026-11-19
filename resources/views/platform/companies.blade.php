@@ -30,7 +30,7 @@
     <div id="platform-content" class="page-shell app-content platform-content">
         <header class="topbar">
             <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">F</span><span>FacturaYa <em>AI</em></span></a>
-            <nav class="product-nav" aria-label="Navegación principal"><a href="/">Emitir comprobante</a><a class="is-active" href="/platform">Empresas</a></nav>
+            <nav class="product-nav" aria-label="Navegación principal"><a href="/">Emitir comprobante</a><a href="/guias">Guías de remisión</a><a class="is-active" href="/platform">Empresas</a></nav>
             <button id="close-platform" class="outline-action compact-action" type="button">Cerrar administración</button>
         </header>
 

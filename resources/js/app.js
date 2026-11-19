@@ -173,12 +173,10 @@ if (document.body.dataset.page === 'invoice') {
         if (!isBoleta && customerDocumentType.value === '0') customerDocumentType.value = '6';
         customerDocumentTypeField.hidden = false;
         customerDocumentNumberField.hidden = isAnonymous;
-        customerNameField.hidden = isAnonymous;
+        customerNameField.hidden = false;
         anonymousCustomerHelp.hidden = !isAnonymous;
         if (isAnonymous) {
             form.elements.customer_ruc.value = '';
-            form.elements.customer_name.value = '';
-            delete form.elements.customer_name.dataset.autoFilled;
         }
         form.elements.customer_ruc.required = !isAnonymous;
         form.elements.customer_name.required = !isAnonymous;
@@ -197,7 +195,7 @@ if (document.body.dataset.page === 'invoice') {
         if (draft) {
             const summaryAnonymous = isBoleta && customerDocumentType.value === '0';
             document.querySelector('#summary-client').textContent = summaryAnonymous
-                ? 'Consumidor final'
+                ? (form.elements.customer_name.value.trim() || 'Consumidor final')
                 : (form.elements.customer_name.value.trim() || 'Cliente');
             document.querySelector('#summary-ruc').textContent = summaryAnonymous
                 ? `Sin documento · ${form.elements.issue_date.value}`
@@ -336,6 +334,53 @@ if (document.body.dataset.page === 'invoice') {
         return row;
     };
 
+    const paymentMethod = document.querySelector('#payment-method');
+    const paymentFields = document.querySelector('#credit-payment-fields');
+    const paymentRows = document.querySelector('#payment-installments');
+    const collectPaymentTerms = () => ({
+        payment_method: paymentMethod.value,
+        outstanding_amount: paymentMethod.value === 'credito' ? form.elements.outstanding_amount.value : null,
+        installments: paymentMethod.value === 'credito' ? [...paymentRows.children].map(row => ({
+            due_date: row.querySelector('.payment-due-date').value,
+            amount: row.querySelector('.payment-amount').value,
+        })) : [],
+    });
+    const refreshPaymentSummary = () => {
+        const terms = collectPaymentTerms();
+        document.querySelector('#summary-payment').textContent = terms.payment_method === 'credito'
+            ? `Crédito · Saldo ${draft?.currency || 'PEN'} ${terms.outstanding_amount} · ${terms.installments.map(q => `${q.due_date}: ${q.amount}`).join(' / ')}`
+            : terms.payment_method === 'contado' ? 'Pago al contado' : 'Condición de pago pendiente';
+    };
+    const addPaymentRow = (value = {}) => {
+        if (paymentRows.children.length >= 12) return;
+        const row = document.createElement('div');
+        row.className = 'form-grid';
+        row.innerHTML = '<label class="field"><span>Vencimiento</span><input class="payment-due-date" type="date" required></label><label class="field"><span>Importe de la cuota</span><input class="payment-amount" inputmode="decimal" placeholder="0.00" required></label><button type="button">Quitar cuota</button>';
+        row.querySelector('.payment-due-date').value = value.due_date || '';
+        row.querySelector('.payment-amount').value = value.amount || '';
+        row.querySelector('button').addEventListener('click', () => { row.remove(); syncPaymentFields(); scheduleAutoSave(); });
+        row.addEventListener('input', () => { refreshPaymentSummary(); scheduleAutoSave(); });
+        paymentRows.appendChild(row);
+    };
+    const syncPaymentFields = () => {
+        const credit = paymentMethod.value === 'credito';
+        paymentFields.hidden = !credit;
+        form.elements.outstanding_amount.disabled = !credit;
+        form.elements.outstanding_amount.required = credit;
+        if (credit && !paymentRows.children.length) addPaymentRow();
+        [...paymentRows.children].forEach((row, index) => {
+            const date = row.querySelector('.payment-due-date');
+            const amount = row.querySelector('.payment-amount');
+            date.name = `installments[${index}][due_date]`;
+            amount.name = `installments[${index}][amount]`;
+            date.disabled = amount.disabled = !credit;
+        });
+        refreshPaymentSummary();
+    };
+    paymentMethod.addEventListener('change', () => { syncPaymentFields(); scheduleAutoSave(); });
+    form.elements.outstanding_amount.addEventListener('input', () => { refreshPaymentSummary(); scheduleAutoSave(); });
+    document.querySelector('#add-payment-installment').addEventListener('click', () => { addPaymentRow(); syncPaymentFields(); scheduleAutoSave(); });
+
     const renderDraft = (value) => {
         draft = value;
         documentType.value = draft.document_type || '01';
@@ -343,8 +388,13 @@ if (document.body.dataset.page === 'invoice') {
         const anonymousDraft = documentType.value === '03' && customerDocumentType.value === '0';
         updateDocumentUi();
         form.elements.customer_ruc.value = anonymousDraft ? '' : (draft.customer.ruc || '');
-        form.elements.customer_name.value = anonymousDraft ? '' : (draft.customer.name || '');
+        form.elements.customer_name.value = draft.customer.name || '';
         form.elements.issue_date.value = draft.issue_date || '';
+        paymentMethod.value = draft.payment_method || 'contado';
+        form.elements.outstanding_amount.value = draft.outstanding_amount || '';
+        paymentRows.innerHTML = '';
+        (draft.installments || []).forEach(addPaymentRow);
+        syncPaymentFields();
         form.querySelectorAll('input[name="tax_mode"]').forEach((input) => {
             input.checked = input.value === draft.tax_mode;
         });
@@ -355,7 +405,9 @@ if (document.body.dataset.page === 'invoice') {
         draftPreview.hidden = false;
         document.querySelector('#preview-title').textContent = 'Revisa los datos extraídos';
         const anonymousCustomer = anonymousDraft;
-        document.querySelector('#summary-client').textContent = anonymousCustomer ? 'Consumidor final' : (draft.customer.name || 'Cliente');
+        document.querySelector('#summary-client').textContent = anonymousCustomer
+            ? (draft.customer.name || 'Consumidor final')
+            : (draft.customer.name || 'Cliente');
         document.querySelector('#summary-ruc').textContent = anonymousCustomer
             ? `Sin documento · ${draft.issue_date}`
             : `${draft.customer.document_type === '1' ? 'DNI' : 'RUC'} ${draft.customer.ruc} · ${draft.issue_date}`;
@@ -383,6 +435,8 @@ if (document.body.dataset.page === 'invoice') {
         draft = null;
         clearTimeout(autoSaveTimer);
         form.reset();
+        paymentRows.innerHTML = '';
+        syncPaymentFields();
         updateDocumentUi();
         fileName.textContent = 'Opcional si escribes los productos · PDF, JPG, PNG o WEBP · máximo 12 MB';
         updateTextCount();
@@ -408,6 +462,7 @@ if (document.body.dataset.page === 'invoice') {
     };
 
     const collectDraft = () => ({
+        ...collectPaymentTerms(),
         document_type: documentType.value,
         customer_document_type: customerDocumentType.value,
         customer_ruc: form.elements.customer_ruc.value,
@@ -531,7 +586,21 @@ if (document.body.dataset.page === 'invoice') {
                 && Number.isFinite(unitPrice) && unitPrice >= 0;
         });
 
-        return customerIsValid && itemsAreValid;
+        const terms = collectPaymentTerms();
+        const decimal = value => /^\d{1,12}(\.\d{1,2})?$/.test(value);
+        let paymentsAreValid = terms.payment_method === 'contado';
+        if (terms.payment_method === 'credito' && documentType.value === '01') {
+            const cents = value => Math.round(Number(value) * 100);
+            let lastDate = form.elements.issue_date.value;
+            paymentsAreValid = decimal(terms.outstanding_amount) && cents(terms.outstanding_amount) > 0
+                && cents(terms.outstanding_amount) <= cents(previewTotals.total) && terms.installments.length > 0
+                && terms.installments.every(quota => {
+                    const valid = quota.due_date > lastDate && decimal(quota.amount) && cents(quota.amount) > 0;
+                    lastDate = quota.due_date;
+                    return valid;
+                }) && terms.installments.reduce((sum, quota) => sum + cents(quota.amount), 0) === cents(terms.outstanding_amount);
+        }
+        return customerIsValid && itemsAreValid && paymentsAreValid;
     };
 
     const setAutosaveStatus = (message, state = 'saved') => {
@@ -596,7 +665,7 @@ if (document.body.dataset.page === 'invoice') {
                 throw new Error('Esta boleta supera S/ 700.00. Selecciona DNI o RUC e identifica al cliente antes de emitirla.');
             }
 
-            throw new Error('Completa correctamente todos los conceptos antes de emitir.');
+            throw new Error('Revisa los conceptos y la condición de pago. Al crédito, indica un saldo positivo y cuotas que sumen ese saldo, con vencimientos posteriores a la emisión.');
         }
 
         setAutosaveStatus('Guardando…', 'saving');
@@ -711,7 +780,7 @@ if (document.body.dataset.page === 'invoice') {
         creditReasonDescription.value = creditReasonDefaults['01'];
         document.querySelector('#credit-invoice-number').textContent = source.invoice.number;
         document.querySelector('#credit-customer').textContent = source.customer.is_anonymous
-            ? 'Consumidor final · Sin documento'
+            ? `${source.customer.name || 'Consumidor final'} · Sin documento`
             : `${source.customer.name} · ${source.customer.document_type === '1' ? 'DNI' : 'RUC'} ${source.customer.ruc}`;
         const creditSeries = source.document_type === '03'
             ? (company.default_boleta_credit_note_series || 'BC01')
@@ -792,7 +861,7 @@ if (document.body.dataset.page === 'invoice') {
             }
             return `<tr>
                 <td><span class="mono-date">${escapeHtml(item.issue_date)}</span></td>
-                <td><strong>${escapeHtml(item.customer.is_anonymous ? 'Consumidor final' : item.customer.name)}</strong><small>${item.customer.is_anonymous ? 'Sin documento' : `${item.customer.document_type === '1' ? 'DNI' : 'RUC'} ${escapeHtml(item.customer.ruc)}`}</small></td>
+                <td><strong>${escapeHtml(item.customer.is_anonymous ? (item.customer.name || 'Consumidor final') : item.customer.name)}</strong><small>${item.customer.is_anonymous ? 'Sin documento' : `${item.customer.document_type === '1' ? 'DNI' : 'RUC'} ${escapeHtml(item.customer.ruc)}`}</small></td>
                 <td><strong>${escapeHtml(item.invoice?.number || 'Borrador')}</strong><small>${item.invoice?.document_type === '03' ? 'Boleta' : 'Factura'}</small>${invoiceEnvironment}${invoiceFileList}${noteList}</td>
                 <td><strong>${money(item.totals.total, item.currency)}</strong></td>
                 <td><span class="activity-status status-${escapeHtml(status)}">${escapeHtml(label)}</span></td>

@@ -1,14 +1,19 @@
 <?php
 
+use App\Http\Controllers\IssuedDocumentController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\CompanyProfileController;
 use App\Http\Controllers\CompanyTokenController;
 use App\Http\Controllers\CreditNoteController;
 use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\DespatchController;
 use App\Http\Controllers\FiscalOperationController;
 use App\Http\Controllers\FiscalPreviewController;
 use App\Http\Controllers\FiscalSetupProbeController;
 use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\InternalPurchaseOrderPdfController;
+use App\Http\Controllers\InternalQuotePdfController;
+use App\Http\Controllers\InternalTaxpayerController;
 use App\Http\Controllers\InvoiceDraftController;
 use App\Http\Middleware\RequireCompanyProfileBridge;
 use App\Http\Middleware\RequireFiscalDiagnosticsBridge;
@@ -29,9 +34,16 @@ Route::prefix('internal')->middleware(RequireCompanyProfileBridge::class)->group
     Route::get('/company-profile/{company}', [CompanyProfileController::class, 'show']);
     Route::post('/company-profile/{company}/sync', [CompanyProfileController::class, 'sync']);
     Route::post('/company-profile/{company}/fiscal-config', [CompanyProfileController::class, 'fiscalConfig']);
+    // Portal app.meowlab.tech (ADR-0010): consulta de RUC sin crear clientes.
+    Route::get('/taxpayers/{ruc}', [InternalTaxpayerController::class, 'show'])->where('ruc', '[0-9]{11}');
+    // ADR-0013: PDF de una cotización de Sales Cat con la plantilla única; no guarda nada.
+    Route::post('/quotes/pdf', InternalQuotePdfController::class);
+    // ADR-0016: PDF de una orden de compra de Reorder Cat con la misma plantilla; no guarda nada.
+    Route::post('/purchase-orders/pdf', InternalPurchaseOrderPdfController::class);
 });
 
 Route::prefix('admin')->middleware('platform.admin')->group(function (): void {
+    Route::put('/companies/{company}/gre-credentials', [DespatchController::class, 'credentials']);
     Route::apiResource('companies', CompanyController::class)->except('destroy');
     Route::post('/companies/{company}/tokens', [CompanyTokenController::class, 'store']);
     Route::delete('/companies/{company}/tokens/{companyApiToken}', [CompanyTokenController::class, 'destroy']);
@@ -39,6 +51,13 @@ Route::prefix('admin')->middleware('platform.admin')->group(function (): void {
 });
 
 Route::middleware('company.auth')->group(function (): void {
+    Route::get('/despatch-invoices', [DespatchController::class, 'invoices']);
+    Route::get('/despatches', [DespatchController::class, 'index']);
+    Route::post('/despatches', [DespatchController::class, 'store']);
+    Route::get('/despatches/{despatch}', [DespatchController::class, 'show']);
+    Route::post('/despatches/{despatch}/issue', [DespatchController::class, 'issue']);
+    Route::post('/despatches/{despatch}/status', [DespatchController::class, 'refresh']);
+    Route::get('/despatches/{despatch}/files/{type}', [DespatchController::class, 'file'])->whereIn('type', ['xml', 'cdr']);
     Route::get('/company', fn (CompanyContext $context) => new CompanyResource($context->company()));
     Route::get('/customers/lookup-dni/{dni}', [CustomerController::class, 'lookupDni']);
     Route::get('/customers/lookup/{ruc}', [CustomerController::class, 'lookup']);
@@ -59,6 +78,9 @@ Route::middleware('company.auth')->group(function (): void {
     Route::get('/invoices/{invoice}/files/{type}', [InvoiceController::class, 'file'])
         ->whereIn('type', ['pdf', 'xml', 'cdr'])
         ->name('api.invoices.file');
+    // Portal app.meowlab.tech (ADR-0006, fase 3): sólo lectura.
+    Route::get('/issued-documents', [IssuedDocumentController::class, 'index']);
+    Route::get('/reports/monthly', [IssuedDocumentController::class, 'monthly']);
     Route::get('/invoices/{invoice}/credit-notes', [CreditNoteController::class, 'index']);
     Route::post('/invoices/{invoice}/credit-notes', [CreditNoteController::class, 'store']);
     Route::get('/credit-notes/{creditNote}/files/{type}', [CreditNoteController::class, 'file'])

@@ -5,12 +5,11 @@ namespace App\Services;
 use App\Data\CustomerLookupResult;
 use App\Data\RucLookupData;
 use App\Models\Company;
-use App\Models\SunatTaxpayer;
-use App\Services\Taxpayer\RucProviderChain;
+use App\Services\Taxpayer\TaxpayerDirectory;
 
 final class CustomerLookupService
 {
-    public function __construct(private readonly RucProviderChain $providers) {}
+    public function __construct(private readonly TaxpayerDirectory $taxpayers) {}
 
     public function findByRuc(Company $company, string $ruc): ?CustomerLookupResult
     {
@@ -19,40 +18,9 @@ final class CustomerLookupService
             return new CustomerLookupResult($saved, 'saved');
         }
 
-        $cached = SunatTaxpayer::query()->find($ruc);
-        if ($cached && $cached->synced_at?->greaterThan(now()->subSeconds($this->cacheTtl()))) {
-            return $this->saveCompanyCustomer($company, new RucLookupData(
-                ruc: $cached->ruc,
-                legalName: $cached->legal_name,
-                status: $cached->status,
-                condition: $cached->condition,
-                address: $cached->fiscal_address,
-                ubigeo: $cached->ubigeo,
-                provider: $cached->provider ?: 'cache',
-                asOf: $cached->as_of,
-            ), 'cache');
-        }
+        $found = $this->taxpayers->find($ruc);
 
-        $result = $this->providers->lookup($ruc);
-        if (! $result) {
-            return null;
-        }
-
-        SunatTaxpayer::query()->updateOrCreate(
-            ['ruc' => $result->ruc],
-            [
-                'legal_name' => $result->legalName,
-                'status' => $result->status,
-                'condition' => $result->condition,
-                'ubigeo' => $result->ubigeo,
-                'fiscal_address' => $result->address,
-                'provider' => $result->provider,
-                'as_of' => $result->asOf,
-                'synced_at' => now(),
-            ],
-        );
-
-        return $this->saveCompanyCustomer($company, $result, $result->provider);
+        return $found ? $this->saveCompanyCustomer($company, $found->data, $found->source) : null;
     }
 
     private function saveCompanyCustomer(Company $company, RucLookupData $data, string $source): CustomerLookupResult
@@ -71,10 +39,5 @@ final class CustomerLookupService
             address: $data->address,
             ubigeo: $data->ubigeo,
         );
-    }
-
-    private function cacheTtl(): int
-    {
-        return max(60, (int) config('facturaya.ruc_lookup.cache_ttl', 86_400));
     }
 }
