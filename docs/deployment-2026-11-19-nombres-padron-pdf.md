@@ -36,9 +36,18 @@
   - `FiscalSetupProbeEndpointTest`.
 - La CI de GitHub no corrió: la cuenta tiene Actions bloqueado por facturación.
 
+## Corrección de datos de CREACIONES J&D (05:57 UTC, autorizada por el operador)
+
+- **Qué cambió:** en la empresa con RUC 10410461248, `legal_name` pasó de «CREACIONES J&D» al nombre registrado en el padrón para ese RUC. `trade_name` quedó en «CREACIONES J&D». Antes del cambio, los dos campos decían «CREACIONES J&D».
+- **Cómo se aplicó:** con Eloquent (`forceFill` y `save`), solo si `legal_name` seguía siendo «CREACIONES J&D» y si el padrón devolvía ese mismo RUC.
+- **Qué no cambió:** el nombre no forma parte del digest del perfil fiscal (RUC, usuario SOL y certificado), así que `profile_version` sigue igual.
+- **Verificación:** la representación de F001-00000027, generada en memoria, muestra «CREACIONES J&D» arriba, el nombre legal debajo y «Nombre» en el cliente.
+- **Revertir:** devolver `legal_name` a «CREACIONES J&D».
+
 ## Pendiente
 
-El `legal_name` de CREACIONES J&D guarda su nombre comercial y no coincide con el padrón. Hay que corregirlo: el nombre del padrón va en `legal_name` y CREACIONES J&D en `trade_name`. Requiere autorización aparte.
+- **Representación de comprobantes ya emitidos.** El PDF se arma con los datos actuales de la empresa, así que los comprobantes emitidos antes de esta corrección ahora muestran el nombre legal nuevo, mientras su XML firmado dice «CREACIONES J&D». Conviene que la representación de un comprobante emitido tome el nombre del emisor de su propio XML.
+- **Factura de prueba.** Emitir una factura nueva para confirmar el nombre legal en el XML.
 
 ## Rollback
 
