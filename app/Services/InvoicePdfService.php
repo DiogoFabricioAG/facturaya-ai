@@ -94,11 +94,12 @@ final class InvoicePdfService
             'number' => $invoice->number,
             'document_name' => $boleta ? 'BOLETA DE VENTA ELECTRÓNICA' : 'FACTURA ELECTRÓNICA',
             'legend' => $boleta ? 'Boleta de Venta Electrónica' : 'Factura Electrónica',
-            'customer_label' => $boleta ? 'Nombre' : 'Razón social',
+            'customer_label' => self::customerLabel($anonymous ? '0' : $customerDocumentType, (string) $draft->customer_ruc),
             'accepted' => $invoice->status === 'accepted',
             'digest' => $this->extractDigest($xml),
             'qr' => SunatQrPayload::fromXml($xml),
             'company_name' => trim((string) $company->legal_name) ?: 'Empresa emisora',
+            'company_trade_name' => self::tradeName($company->trade_name, $company->legal_name),
             'company_ruc' => (string) $company->ruc,
             'company_address' => $this->address($company),
             'customer_name' => trim((string) $draft->customer_name) ?: ($anonymous ? 'Consumidor final' : 'Cliente'),
@@ -320,14 +321,40 @@ final class InvoicePdfService
         return $this->assemble($streams);
     }
 
+    /**
+     * SUNAT names a person (DNI, or a RUC that starts with 10, 15 or 17) by surnames and names, and
+     * only a company (RUC 20) has a razón social.
+     */
+    public static function customerLabel(string $documentType, string $number): string
+    {
+        return $documentType === '6' && str_starts_with($number, '20') ? 'Razón social' : 'Nombre';
+    }
+
+    /** The trade name, when the company has one that is not its legal name. */
+    public static function tradeName(mixed $tradeName, mixed $legalName): ?string
+    {
+        $trade = trim((string) $tradeName);
+
+        return $trade !== '' && mb_strtoupper($trade) !== mb_strtoupper(trim((string) $legalName)) ? $trade : null;
+    }
+
     /** @param array<int, string> $commands @param array<string, mixed> $data */
     private function drawHeader(array &$commands, array $data): float
     {
         $this->text($commands, self::LEFT, 801, 'DATOS DEL EMISOR', 8.5, true, self::INK);
         $y = 783;
-        foreach (array_slice($this->wrap($data['company_name'], 300, 11.5, true), 0, 2) as $line) {
-            $this->text($commands, self::LEFT, $y, $line, 11.5, true, self::INK);
-            $y -= 14;
+        $trade = trim((string) ($data['company_trade_name'] ?? ''));
+        if ($trade !== '') {
+            // The trade name leads, as the business is known; the legal name follows, as SUNAT requires.
+            $this->text($commands, self::LEFT, $y, $this->wrap($trade, 300, 11.5, true)[0], 11.5, true, self::INK);
+            $y -= 13;
+            $this->text($commands, self::LEFT, $y, $this->wrap($data['company_name'], 300, 8.5, true)[0], 8.5, true, self::MUTED);
+            $y -= 12;
+        } else {
+            foreach (array_slice($this->wrap($data['company_name'], 300, 11.5, true), 0, 2) as $line) {
+                $this->text($commands, self::LEFT, $y, $line, 11.5, true, self::INK);
+                $y -= 14;
+            }
         }
         $y -= 3;
         $this->text($commands, self::LEFT, $y, 'RUC  '.$data['company_ruc'], 9, false, self::INK);

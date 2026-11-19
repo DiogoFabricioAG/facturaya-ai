@@ -114,6 +114,41 @@ final class FiscalPdfPaginationTest extends TestCase
         self::assertGreaterThanOrEqual(348, (float) $title[2], 'The boleta title must fit inside its box.');
     }
 
+    public function test_customer_label_follows_the_document(): void
+    {
+        self::assertSame('Razón social', InvoicePdfService::customerLabel('6', '20557288016'));
+        self::assertSame('Nombre', InvoicePdfService::customerLabel('6', '10773925360'));
+        self::assertSame('Nombre', InvoicePdfService::customerLabel('1', '12345678'));
+        self::assertSame('Nombre', InvoicePdfService::customerLabel('0', ''));
+    }
+
+    public function test_trade_name_is_shown_only_when_it_differs_from_the_legal_name(): void
+    {
+        self::assertSame('CREACIONES J&D', InvoicePdfService::tradeName('CREACIONES J&D', 'PEREZ GOMEZ JUAN'));
+        self::assertNull(InvoicePdfService::tradeName('Empresa S.A.C.', 'EMPRESA S.A.C.'));
+        self::assertNull(InvoicePdfService::tradeName(null, 'EMPRESA S.A.C.'));
+    }
+
+    public function test_header_shows_the_trade_name_and_the_legal_name(): void
+    {
+        $data = [
+            'number' => 'F001-00000028', 'document_name' => 'FACTURA ELECTRÓNICA', 'legend' => 'Factura Electrónica',
+            'customer_label' => 'Nombre', 'accepted' => true, 'digest' => 'hL81j2c58Xhlr1Rl2Qncx/hECPg=',
+            'company_name' => 'PEREZ GOMEZ JUAN', 'company_trade_name' => 'CREACIONES J&D', 'company_ruc' => '10410461248',
+            'company_address' => 'RIMAC DE CAMPOY, LIMA, LIMA, LIMA',
+            'customer_name' => 'DORADO ORTIZ PAOLA YANINA', 'customer_document_label' => 'RUC', 'customer_document_number' => '10773925360',
+            'issue_date' => '19/11/2026', 'currency_label' => 'SOLES (PEN)', 'payment_method' => 'CONTADO', 'outstanding' => null,
+            'installments' => [], 'subtotal' => 'S/ 325.42', 'igv' => 'S/ 58.58', 'total' => 'S/ 384.00',
+            'amount_in_words' => 'SON TRESCIENTOS OCHENTA Y CUATRO CON 00/100 SOLES',
+            'items' => [['description' => 'polos con bordados', 'quantity' => '16.000', 'unit_price' => 'S/ 24.00', 'total' => 'S/ 384.00']],
+        ];
+        $pdf = (new ReflectionMethod(InvoicePdfService::class, 'makePdf'))->invoke(new InvoicePdfService, $data);
+
+        self::assertMatchesRegularExpression('~783\.00 Tm \(CREACIONES J&D\)~', $pdf);
+        self::assertMatchesRegularExpression('~770\.00 Tm \(PEREZ GOMEZ JUAN\)~', $pdf);
+        self::assertStringContainsString('(Nombre)', $pdf);
+    }
+
     public static function renderers(): iterable
     {
         yield 'invoice' => [InvoicePdfService::class];

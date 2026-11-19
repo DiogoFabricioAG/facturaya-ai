@@ -194,7 +194,7 @@ final class CreditNotePdfService
 
         $this->text($commands, 42, 705, 'DATOS DEL EMISOR:', 9, '/F2', self::BLACK);
         $this->text($commands, 50, 686, 'RUC: '.$data['company_ruc'], 9, '/F1', self::BLACK);
-        $this->text($commands, 50, 669, 'RAZON SOCIAL: '.$this->shortText($data['company_name'], 86), 9, '/F1', self::BLACK);
+        $this->text($commands, 50, 669, 'NOMBRE O RAZON SOCIAL: '.$this->shortText($data['company_name'], 78), 9, '/F1', self::BLACK);
         $this->text($commands, 50, 652, 'DOMICILIO FISCAL: '.$this->shortText($data['company_address'] ?: 'No registrado', 82), 9, '/F1', self::BLACK);
 
         $this->text($commands, 42, 624, 'DATOS DEL CLIENTE:', 9, '/F2', self::BLACK);
