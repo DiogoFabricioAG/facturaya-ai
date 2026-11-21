@@ -120,7 +120,7 @@ final class FiscalSetupProbeEndpointTest extends TestCase
             ->assertJsonPath('config_version', 3)
             ->assertJsonPath('environment', 'production')
             ->assertJsonPath('ruc', self::RUC)
-            ->assertJsonPath('technical_evidence.schema_version', 1)
+            ->assertJsonPath('technical_evidence.schema_version', 2)
             ->assertJsonPath('technical_evidence.source', 'facturaya_non_issuing_diagnostics')
             ->assertJsonPath('technical_evidence.credentials.status', 'pending')
             ->assertJsonPath('technical_evidence.credentials.source', 'pending_dashboard_execution')
