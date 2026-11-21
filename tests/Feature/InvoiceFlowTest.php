@@ -646,4 +646,74 @@ class InvoiceFlowTest extends TestCase
             "%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\n%%EOF",
         );
     }
+
+    private function fakeExtractor(array $extraction): \App\Contracts\DocumentExtractor
+    {
+        return new class($extraction) implements \App\Contracts\DocumentExtractor {
+            public function __construct(private readonly array $extraction) {}
+
+            public function extract(?string $text = null, ?UploadedFile $file = null): array
+            {
+                return $this->extraction;
+            }
+
+            public function extractFile(UploadedFile $file): array
+            {
+                return $this->extraction;
+            }
+
+            public function extractText(string $text): array
+            {
+                return $this->extraction;
+            }
+        };
+    }
+
+    public function test_import_returns_422_with_code_message_and_preserves_raw_extraction_when_item_price_is_missing(): void
+    {
+        $rawExtraction = [
+            'currency' => 'PEN',
+            'items' => [
+                ['description' => 'polos', 'quantity' => 10, 'unit_price' => null],
+            ],
+            'warnings' => ['Falta precio unitario en polos.'],
+        ];
+
+        $this->app->bind(\App\Contracts\DocumentExtractor::class, fn () => $this->fakeExtractor($rawExtraction));
+
+        $response = $this->postJson('/api/invoice-drafts/import', [
+            ...$this->customerData(),
+            'tax_mode' => 'included',
+            'products_text' => '10 polos',
+        ], $this->companyHeaders());
+
+        $response->assertStatus(422)
+            ->assertJsonPath('data.status', 'failed')
+            ->assertJsonPath('data.error.code', 'missing_item_price')
+            ->assertJsonPath('data.error.message', 'Falta el precio de "polos".');
+
+        $draft = InvoiceDraft::firstOrFail();
+        $this->assertSame('failed', $draft->status);
+        $this->assertSame($rawExtraction, $draft->raw_extraction);
+        $this->assertSame('Falta el precio de "polos".', $draft->error_message);
+    }
+
+    public function test_import_returns_422_with_missing_items_code_when_extraction_has_no_items(): void
+    {
+        $rawExtraction = ['currency' => 'PEN', 'items' => []];
+
+        $this->app->bind(\App\Contracts\DocumentExtractor::class, fn () => $this->fakeExtractor($rawExtraction));
+
+        $response = $this->postJson('/api/invoice-drafts/import', [
+            ...$this->customerData(),
+            'tax_mode' => 'included',
+            'products_text' => 'Texto sin productos',
+        ], $this->companyHeaders());
+
+        $response->assertStatus(422)
+            ->assertJsonPath('data.error.code', 'missing_items')
+            ->assertJsonPath('data.error.message', 'No encontré productos o servicios válidos en tu mensaje.');
+
+        $this->assertSame($rawExtraction, InvoiceDraft::firstOrFail()->raw_extraction);
+    }
 }

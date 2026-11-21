@@ -4,13 +4,13 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Convierte texto, imágenes o PDF en una factura electrónica lista para revisar y enviar a SUNAT.">
-    <title>Emitir comprobante · FacturaYa AI</title>
+    <title>Emitir comprobante · MeowLab</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body data-page="invoice">
     <section id="access-gate" class="access-gate" aria-labelledby="access-title">
         <div class="access-visual" aria-hidden="true">
-            <div class="access-brand"><span class="brand-mark">F</span><span>FacturaYa <em>AI</em></span></div>
+            <div class="access-brand"><span class="brand-mark">M</span><span>MeowLab <em>Invoice Cat</em></span></div>
             <div class="route-poster">
                 <span class="route-origin">ENTRADA</span>
                 <div class="route-line"><i></i><i></i><i></i><i></i></div>
@@ -37,7 +37,7 @@
 
     <div class="page-shell app-content" id="app-content">
         <header class="topbar">
-            <a class="brand" href="/" aria-label="FacturaYa AI, inicio"><span class="brand-mark" aria-hidden="true">F</span><span>FacturaYa <em>AI</em></span></a>
+            <a class="brand" href="/" aria-label="MeowLab, inicio"><span class="brand-mark" aria-hidden="true">M</span><span>MeowLab <em>Invoice Cat</em></span></a>
             <nav class="product-nav" aria-label="Navegación principal">
                 <a class="is-active" href="/">Emitir comprobante</a>
                 <a href="/guias">Guías de remisión</a>
@@ -235,7 +235,7 @@
             </section>
         </main>
 
-        <footer><span>FacturaYa AI · Espacio multiempresa</span><span>Cálculo determinístico · Greenter {{ \Composer\InstalledVersions::getPrettyVersion('greenter/lite') }}</span></footer>
+        <footer><span>MeowLab · Invoice Cat</span><span>Cálculo determinístico · Greenter {{ \Composer\InstalledVersions::getPrettyVersion('greenter/lite') }}</span></footer>
     </div>
 
     <div id="credit-note-drawer" class="drawer-backdrop" hidden>
