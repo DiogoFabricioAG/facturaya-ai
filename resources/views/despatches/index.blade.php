@@ -4,13 +4,13 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Crea, revisa y envía a SUNAT guías de remisión remitente vinculadas a tus facturas.">
-    <title>Guías de remisión · FacturaYa AI</title>
+    <title>Guías de remisión · MeowLab</title>
     @vite(['resources/css/app.css', 'resources/js/despatches.js'])
 </head>
 <body data-page="despatches">
     <section id="access-gate" class="access-gate" aria-labelledby="access-title">
         <div class="access-visual" aria-hidden="true">
-            <div class="access-brand"><span class="brand-mark">F</span><span>FacturaYa <em>AI</em></span></div>
+            <div class="access-brand"><span class="brand-mark">M</span><span>MeowLab <em>Invoice Cat</em></span></div>
             <div class="route-poster">
                 <span class="route-origin">PARTIDA</span>
                 <div class="route-line"><i></i><i></i><i></i><i></i></div>
@@ -37,7 +37,7 @@
 
     <div class="page-shell app-content" id="app-content">
         <header class="topbar">
-            <a class="brand" href="/" aria-label="FacturaYa AI, inicio"><span class="brand-mark" aria-hidden="true">F</span><span>FacturaYa <em>AI</em></span></a>
+            <a class="brand" href="/" aria-label="MeowLab, inicio"><span class="brand-mark" aria-hidden="true">M</span><span>MeowLab <em>Invoice Cat</em></span></a>
             <nav class="product-nav" aria-label="Navegación principal">
                 <a href="/">Emitir comprobante</a>
                 <a class="is-active" href="/guias">Guías de remisión</a>
@@ -220,7 +220,7 @@
             </section>
         </main>
 
-        <footer><span>FacturaYa AI · Guías de remisión remitente</span><span>Greenter {{ \Composer\InstalledVersions::getPrettyVersion('greenter/lite') }}</span></footer>
+        <footer><span>MeowLab · Guías de remisión remitente</span><span>Greenter {{ \Composer\InstalledVersions::getPrettyVersion('greenter/lite') }}</span></footer>
     </div>
 
     <script id="gre-units" type="application/json">@json($units)</script>

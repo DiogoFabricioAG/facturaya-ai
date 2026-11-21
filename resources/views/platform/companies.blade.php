@@ -3,14 +3,14 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Administra empresas emisoras en FacturaYa AI.">
-    <title>Empresas · FacturaYa AI</title>
+    <meta name="description" content="Administra empresas emisoras en MeowLab.">
+    <title>Empresas · MeowLab</title>
     @vite(['resources/css/app.css', 'resources/js/platform.js'])
 </head>
 <body data-page="platform">
     <section id="platform-gate" class="access-gate platform-gate" aria-labelledby="platform-access-title">
         <div class="access-visual platform-access-visual" aria-hidden="true">
-            <div class="access-brand"><span class="brand-mark">F</span><span>FacturaYa <em>AI</em></span></div>
+            <div class="access-brand"><span class="brand-mark">M</span><span>MeowLab <em>Invoice Cat</em></span></div>
             <div class="dossier-stack"><span>RUC</span><span>SOL</span><span>F001</span></div>
             <p>Un expediente seguro para cada emisor.</p>
         </div>
@@ -29,7 +29,7 @@
 
     <div id="platform-content" class="page-shell app-content platform-content">
         <header class="topbar">
-            <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">F</span><span>FacturaYa <em>AI</em></span></a>
+            <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">M</span><span>MeowLab <em>Invoice Cat</em></span></a>
             <nav class="product-nav" aria-label="Navegación principal"><a href="/">Emitir comprobante</a><a href="/guias">Guías de remisión</a><a class="is-active" href="/platform">Empresas</a></nav>
             <button id="close-platform" class="outline-action compact-action" type="button">Cerrar administración</button>
         </header>
@@ -54,7 +54,7 @@
             </section>
         </main>
 
-        <footer><span>FacturaYa AI · Administración</span><span>Credenciales y certificados cifrados con APP_KEY</span></footer>
+        <footer><span>MeowLab · Administración</span><span>Credenciales y certificados cifrados con APP_KEY</span></footer>
     </div>
 
     <div id="company-drawer" class="drawer-backdrop" aria-hidden="true" hidden>

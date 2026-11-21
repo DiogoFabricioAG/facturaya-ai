@@ -14,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -64,6 +65,8 @@ class InvoiceDraftController extends Controller
             'ai_driver' => (string) config('facturaya.ai.driver'),
         ]);
 
+        $extraction = null;
+
         try {
             $extraction = $extractor->extract($sourceText, $file);
             $items = $this->validatedExtractionItems($extraction);
@@ -79,16 +82,31 @@ class InvoiceDraftController extends Controller
             InvoicePaymentTerms::validate($draft->fresh());
         } catch (Throwable $exception) {
             report($exception);
-            $draft->update([
-                'status' => 'failed',
-                'error_message' => $exception instanceof ValidationException
-                    ? collect($exception->errors())->flatten()->first() ?? 'Revisa los datos del borrador.'
-                    : $exception->getMessage(),
+            $errorPayload = $this->extractionErrorPayload($exception, $extraction);
+            $failedRules = $exception instanceof ValidationException ? array_keys($exception->errors()) : [];
+
+            Log::warning('invoice_draft_extraction_validation_failed', [
+                'draft_id' => $draft->id,
+                'company_id' => $company->id,
+                'code' => $errorPayload['code'],
+                'failed_rules' => $failedRules,
+                'has_extraction' => is_array($extraction),
             ]);
 
-            return (new InvoiceDraftResource($draft->fresh()->load(['company', 'items', 'invoice'])))
-                ->response()
-                ->setStatusCode(422);
+            $draft->update([
+                'status' => 'failed',
+                'error_message' => $errorPayload['message'],
+                ...(is_array($extraction) ? [
+                    'raw_extraction' => $extraction,
+                    'warnings' => Arr::get($extraction, 'warnings', []),
+                ] : []),
+            ]);
+
+            $freshDraft = $draft->fresh()->load(['company', 'items', 'invoice']);
+            $payload = (new InvoiceDraftResource($freshDraft))->resolve($request);
+            $payload['error'] = $errorPayload;
+
+            return response()->json(['data' => $payload], 422);
         }
 
         return (new InvoiceDraftResource($draft->fresh()->load(['company', 'items', 'invoice'])))
@@ -206,5 +224,76 @@ class InvoiceDraftController extends Controller
             'items.*.confidence' => ['nullable', 'numeric', 'between:0,1'],
             'items.*.source_page' => ['nullable', 'integer', 'min:1'],
         ])->validate()['items'];
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $extraction
+     * @return array{code: string, message: string}
+     */
+    private function extractionErrorPayload(Throwable $exception, ?array $extraction): array
+    {
+        if (! $exception instanceof ValidationException) {
+            return [
+                'code' => 'extraction_failed',
+                'message' => 'No pude interpretar los datos del borrador. Revisa el texto o archivo.',
+            ];
+        }
+
+        $errors = $exception->errors();
+        $firstField = (string) (array_key_first($errors) ?? '');
+
+        if ($firstField === 'currency') {
+            return [
+                'code' => 'invalid_currency',
+                'message' => 'La moneda debe ser soles (PEN) o dólares (USD).',
+            ];
+        }
+
+        if ($firstField === 'items') {
+            return [
+                'code' => 'missing_items',
+                'message' => 'No encontré productos o servicios válidos en tu mensaje.',
+            ];
+        }
+
+        if (preg_match('/^items\.(\d+)\.(description|quantity|unit_price)$/', $firstField, $matches) === 1) {
+            $index = (int) $matches[1];
+            $field = $matches[2];
+            $rawDescription = trim((string) Arr::get($extraction ?? [], "items.{$index}.description", ''));
+            $label = $rawDescription !== '' ? '"'.Str::limit($rawDescription, 40, '…').'"' : null;
+
+            return match ($field) {
+                'description' => [
+                    'code' => 'missing_item_description',
+                    'message' => 'Falta la descripción de uno de los productos.',
+                ],
+                'quantity' => [
+                    'code' => 'invalid_item_quantity',
+                    'message' => $label !== null
+                        ? "Falta una cantidad válida para {$label}."
+                        : 'Falta una cantidad válida en uno de los productos.',
+                ],
+                'unit_price' => [
+                    'code' => 'missing_item_price',
+                    'message' => $label !== null
+                        ? "Falta el precio de {$label}."
+                        : 'Falta el precio de uno de los productos.',
+                ],
+            };
+        }
+
+        if (str_starts_with($firstField, 'payment_') || str_starts_with($firstField, 'outstanding_') || str_starts_with($firstField, 'installments')) {
+            $paymentMessage = trim((string) (collect($errors)->flatten()->first() ?? ''));
+
+            return [
+                'code' => 'invalid_payment_terms',
+                'message' => $paymentMessage !== '' ? Str::limit($paymentMessage, 180) : 'Revisa las condiciones de pago del borrador.',
+            ];
+        }
+
+        return [
+            'code' => 'extraction_failed',
+            'message' => 'No pude validar los datos extraídos del borrador.',
+        ];
     }
 }
