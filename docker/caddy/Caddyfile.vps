@@ -37,7 +37,26 @@ meowlab.tech, www.meowlab.tech {
 		Referrer-Policy "strict-origin-when-cross-origin"
 	}
 
-	reverse_proxy meowlab-web:80
+	@demo_www {
+		host www.meowlab.tech
+		path /debt-hub /debt-hub/*
+	}
+	redir @demo_www https://meowlab.tech{uri} 308
+	handle /debt-hub {
+		redir /debt-hub/ 308
+	}
+	handle /debt-hub/api/* {
+		uri strip_prefix /debt-hub
+		reverse_proxy {$DEBT_HUB_API_UPSTREAM} {
+			header_up X-Demo-Client-IP {remote_host}
+		}
+	}
+	handle_path /debt-hub/* {
+		reverse_proxy hub-deuda-staging:80
+	}
+	handle {
+		reverse_proxy meowlab-web:80
+	}
 
 	log {
 		output stdout
@@ -50,16 +69,30 @@ app.meowlab.tech {
 
 	header {
 		Strict-Transport-Security "max-age=31536000"
-		X-Content-Type-Options "nosniff"
-		X-Frame-Options "SAMEORIGIN"
-		Referrer-Policy "strict-origin-when-cross-origin"
-		Permissions-Policy "camera=(), geolocation=(), microphone=()"
+		-Server
 	}
 
-	reverse_proxy meowlab-platform-dashboard-1:8082
+	# El portal agrega CSP, X-Frame-Options y el resto desde web/public/_headers.
+	reverse_proxy meowlab-app:8080
 
 	log {
 		output stdout
 		format console
 	}
+}
+
+radar.meowlab.tech {
+    encode zstd gzip
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "camera=(), geolocation=(), microphone=()"
+    }
+    reverse_proxy radar-pilot-web:80
+    log {
+        output stdout
+        format console
+    }
 }
