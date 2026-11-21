@@ -80,6 +80,7 @@ final class InvoicePdfService
             : '';
         $company = $invoice->company;
         $draft = $invoice->draft;
+        $issuer = self::issuerFromXml($xml);
         $documentType = (string) ($invoice->document_type ?: $draft->document_type ?: '01');
         $boleta = $documentType === '03';
         $customerDocumentType = $draft->customer_document_type !== null
@@ -98,8 +99,12 @@ final class InvoicePdfService
             'accepted' => $invoice->status === 'accepted',
             'digest' => $this->extractDigest($xml),
             'qr' => SunatQrPayload::fromXml($xml),
-            'company_name' => trim((string) $company->legal_name) ?: 'Empresa emisora',
-            'company_trade_name' => self::tradeName($company->trade_name, $company->legal_name),
+            'company_name' => $issuer !== null
+                ? $issuer['legal_name']
+                : (trim((string) $company->legal_name) ?: 'Empresa emisora'),
+            'company_trade_name' => $issuer !== null
+                ? $issuer['trade_name']
+                : self::tradeName($company->trade_name, $company->legal_name),
             'company_ruc' => (string) $company->ruc,
             'company_address' => $this->address($company),
             'customer_name' => trim((string) $draft->customer_name) ?: ($anonymous ? 'Consumidor final' : 'Cliente'),
@@ -336,6 +341,54 @@ final class InvoicePdfService
         $trade = trim((string) $tradeName);
 
         return $trade !== '' && mb_strtoupper($trade) !== mb_strtoupper(trim((string) $legalName)) ? $trade : null;
+    }
+
+    /**
+     * Reads the issuer legal name and trade name from a UBL 2.1 XML (Invoice or CreditNote).
+     * Returns null when the XML is absent, malformed or lacks RegistrationName.
+     *
+     * @return array{legal_name: string, trade_name: ?string}|null
+     */
+    public static function issuerFromXml(string $xml): ?array
+    {
+        if (trim($xml) === '') {
+            return null;
+        }
+
+        $previous = libxml_use_internal_errors(true);
+        try {
+            $document = new \DOMDocument;
+            if (! @$document->loadXML($xml, LIBXML_NONET | LIBXML_NOBLANKS)) {
+                return null;
+            }
+            $xpath = new \DOMXPath($document);
+            $xpath->registerNamespace('cbc', 'urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2');
+            $xpath->registerNamespace('cac', 'urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2');
+
+            $read = static function (string $query) use ($xpath): string {
+                $nodes = $xpath->query($query);
+
+                return $nodes !== false && $nodes->length > 0
+                    ? trim((string) $nodes->item(0)?->textContent)
+                    : '';
+            };
+
+            $base = '/*[1]/cac:AccountingSupplierParty/cac:Party';
+            $legalName = $read($base.'/cac:PartyLegalEntity/cbc:RegistrationName');
+            if ($legalName === '') {
+                return null;
+            }
+
+            $rawTrade = $read($base.'/cac:PartyName/cbc:Name');
+
+            return [
+                'legal_name' => $legalName,
+                'trade_name' => self::tradeName($rawTrade, $legalName),
+            ];
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+        }
     }
 
     /** @param array<int, string> $commands @param array<string, mixed> $data */

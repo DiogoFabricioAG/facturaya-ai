@@ -29,6 +29,10 @@ final class CreditNotePdfService
         $company = $creditNote->company;
         $invoice = $creditNote->invoice;
         $draft = $invoice?->draft;
+        $xml = $creditNote->xml_path && Storage::disk('local')->exists($creditNote->xml_path)
+            ? (string) Storage::disk('local')->get($creditNote->xml_path)
+            : '';
+        $issuer = InvoicePdfService::issuerFromXml($xml);
 
         $customerName = $draft ? trim((string) $draft->customer_name) : 'Cliente';
         $customerRuc = $draft ? (string) $draft->customer_ruc : '-';
@@ -37,9 +41,7 @@ final class CreditNotePdfService
         $data = [
             'number' => $creditNote->number,
             // SUNAT QR (anexo N.° 6, 6.4), from the signed XML.
-            'qr' => SunatQrPayload::fromXml($creditNote->xml_path && Storage::disk('local')->exists($creditNote->xml_path)
-                ? (string) Storage::disk('local')->get($creditNote->xml_path)
-                : ''),
+            'qr' => SunatQrPayload::fromXml($xml),
             'document_type' => '07',
             'document_name' => 'NOTA DE CREDITO ELECTRONICA',
             'series' => (string) $creditNote->series,
@@ -47,7 +49,12 @@ final class CreditNotePdfService
             'origin_number' => (string) ($invoice?->number ?: '-'),
             'reason_code' => (string) $creditNote->reason_code,
             'reason_description' => (string) $creditNote->reason_description,
-            'company_name' => trim((string) $company->legal_name) ?: 'Empresa emisora',
+            'company_name' => $issuer !== null
+                ? $issuer['legal_name']
+                : (trim((string) $company->legal_name) ?: 'Empresa emisora'),
+            'company_trade_name' => $issuer !== null
+                ? $issuer['trade_name']
+                : InvoicePdfService::tradeName($company->trade_name ?? null, $company->legal_name),
             'company_ruc' => (string) $company->ruc,
             'company_address' => $this->address($company),
             'customer_name' => $customerName ?: 'Cliente',
@@ -195,7 +202,13 @@ final class CreditNotePdfService
         $this->text($commands, 42, 705, 'DATOS DEL EMISOR:', 9, '/F2', self::BLACK);
         $this->text($commands, 50, 686, 'RUC: '.$data['company_ruc'], 9, '/F1', self::BLACK);
         $this->text($commands, 50, 669, 'NOMBRE O RAZON SOCIAL: '.$this->shortText($data['company_name'], 78), 9, '/F1', self::BLACK);
-        $this->text($commands, 50, 652, 'DOMICILIO FISCAL: '.$this->shortText($data['company_address'] ?: 'No registrado', 82), 9, '/F1', self::BLACK);
+        $tradeName = trim((string) ($data['company_trade_name'] ?? ''));
+        if ($tradeName !== '') {
+            $this->text($commands, 50, 653, 'NOMBRE COMERCIAL: '.$this->shortText($tradeName, 80), 9, '/F1', self::BLACK);
+            $this->text($commands, 50, 637, 'DOMICILIO FISCAL: '.$this->shortText($data['company_address'] ?: 'No registrado', 82), 9, '/F1', self::BLACK);
+        } else {
+            $this->text($commands, 50, 652, 'DOMICILIO FISCAL: '.$this->shortText($data['company_address'] ?: 'No registrado', 82), 9, '/F1', self::BLACK);
+        }
 
         $this->text($commands, 42, 624, 'DATOS DEL CLIENTE:', 9, '/F2', self::BLACK);
         $this->text($commands, 50, 605, 'TIPO DE DOCUMENTO: '.$data['customer_document_label'], 9, '/F1', self::BLACK);
